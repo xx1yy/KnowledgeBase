@@ -29,8 +29,6 @@ python server.py
 然后访问控制台输出的地址（默认 `http://localhost:16000`）。
 
 > 首次使用建议先创建一些笔记体验完整功能。
->
-> **注意**：如果之前运行过旧版本（前端未拆分的 `dashboard.html`），拆分后请在浏览器中执行一次**硬刷新**（Ctrl+F5 或 Cmd+Shift+R）确保加载新的外部资源。
 
 ## 项目结构
 
@@ -41,15 +39,7 @@ python server.py
 ├── vault.py               # 数据操作层（文件读写、解析、搜索、图谱）
 ├── templates.py           # Markdown 模板生成（7 种类型模板）
 ├── handler.py             # HTTP 请求处理（API 路由分发）
-├── dashboard.html          # 前端 HTML 骨架（引用外部 CSS/JS）
-├── styles.css              # 前端全部样式
-├── api.js                  # 前端 API 请求封装
-├── utils.js                # 前端工具函数（HTML 转义、日期格式化）
-├── markdown.js             # 前端 Markdown → HTML 渲染器
-├── dashboard.js            # 前端仪表盘视图逻辑
-├── note.js                 # 前端笔记阅读与概念提取
-├── graph.js                # 前端知识图谱 SVG 渲染
-├── app.js                  # 前端导航、搜索、弹窗、初始化
+├── dashboard.html          # 前端单页应用（纯 HTML+CSS+JS）
 ├── startKnowledgeBase.bat  # Windows 启动脚本
 ├── startKnowledgeBase.ps1  # PowerShell 启动脚本
 └── 个人知识库/            # ⚡ 知识库数据目录（Markdown 仓库）
@@ -74,15 +64,7 @@ python server.py
 | `vault.py` | Frontmatter 解析、文件读写、搜索、图谱 | config |
 | `templates.py` | 7 种 Markdown 模板生成 | 标准库 |
 | `handler.py` | HTTP 路由分发（GET/POST/PUT/DELETE） | config, vault, templates |
-| `dashboard.html` | 前端 HTML 骨架（~43 行） | 后端 API |
-| `styles.css` | 前端全部样式（~175 行） | 无 |
-| `api.js` | 前端 API 请求封装（GET/POST/PUT/DELETE） | 无 |
-| `utils.js` | HTML 转义、日期格式化、类型映射常量 | 无 |
-| `markdown.js` | Markdown → HTML 渲染（wikilink、粗体、引用等） | utils |
-| `dashboard.js` | 仪表盘统计卡片与最近更新列表 | api, utils, markdown |
-| `note.js` | 文学笔记/视频笔记阅读、编辑、概念提取 | api, utils, markdown |
-| `graph.js` | 知识图谱力导向布局 SVG 渲染 | api |
-| `app.js` | 导航栏、搜索、弹窗、CRUD 操作、应用初始化 | 以上所有模块 |
+| `dashboard.html` | 前端所有 UI 与交互逻辑 | 后端 API |
 
 ## API 接口
 
@@ -131,4 +113,4 @@ updated: "2026-07-04 15:30"
 
 - 修改默认端口：编辑 `config.py` 中的 `PORT` 变量
 - 添加新类型：在 `config.py` 的 `DIR_TYPE`、`TYPE_DIR` 中添加映射，在 `templates.py` 中添加对应模板
-- 修改前端：前端已拆分为模块化文件（`styles.css` + 7 个 `.js` 文件），按职责编辑对应模块即可，无需构建工具
+- 修改前端：直接编辑 `dashboard.html`，无需构建工具

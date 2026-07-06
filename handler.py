@@ -8,7 +8,6 @@ import time
 import traceback
 import urllib.parse
 import shutil
-from pathlib import Path
 
 from config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log
 from vault import (
@@ -57,6 +56,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path = parsed.path
             params = urllib.parse.parse_qs(parsed.query)
 
+            # 诊断：记录路径和FRONTEND_FILE状态
+            log(f"[DIAG] do_GET path={repr(path)} self.path={repr(self.path)}")
+            log(f"[DIAG] FRONTEND_FILE={FRONTEND_FILE} exists={FRONTEND_FILE.exists()}")
+
             # 前端页面
             if path == '/' or path == '/index.html':
                 self._serve_frontend()
@@ -96,10 +99,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._handle_get_item(params)
                 return
 
-            # 静态文件（.css / .js / .png 等）
-            if self._serve_static(path):
-                return
-
             self.send_error(404, 'Not Found')
         except Exception as e:
             traceback.print_exc()
@@ -107,40 +106,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_error(500, str(e))
             except Exception:
                 pass
-
-    def _serve_static(self, path):
-        """尝试从项目根目录提供静态文件。"""
-        root = Path(__file__).parent
-        # 防止目录遍历攻击
-        clean_path = path.lstrip('/')
-        if '..' in clean_path or '~' in clean_path:
-            return False
-        fp = root / clean_path
-        if not fp.exists() or not fp.is_file():
-            return False
-        ext = fp.suffix.lower()
-        mime_map = {
-            '.css': 'text/css',
-            '.js': 'application/javascript',
-            '.html': 'text/html',
-            '.json': 'application/json',
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.svg': 'image/svg+xml',
-            '.ico': 'image/x-icon',
-        }
-        content_type = mime_map.get(ext, 'application/octet-stream')
-        try:
-            body = fp.read_bytes()
-            self.send_response(200)
-            self.send_header('Content-Type', f'{content_type}; charset=utf-8' if ext in ('.css','.js','.html','.json','.svg') else content_type)
-            self.send_header('Content-Length', str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return True
-        except Exception:
-            return False
 
     def _serve_frontend(self):
         try:
