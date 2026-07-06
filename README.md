@@ -15,7 +15,7 @@
 
 ### 方式一：双击启动（推荐）
 
-双击 `启动知识库.bat`，脚本会自动：
+双击 `startKnowledgeBase.bat`，脚本会自动：
 1. 打开后端服务
 2. 等待服务就绪
 3. 在浏览器中打开主界面
@@ -39,9 +39,9 @@ python server.py
 ├── vault.py               # 数据操作层（文件读写、解析、搜索、图谱）
 ├── templates.py           # Markdown 模板生成（7 种类型模板）
 ├── handler.py             # HTTP 请求处理（API 路由分发）
-├── 知识库面板.html        # 前端单页应用（纯 HTML+CSS+JS）
-├── 启动知识库.bat         # Windows 启动脚本
-├── 启动知识库.ps1         # PowerShell 启动脚本
+├── dashboard.html          # 前端单页应用（纯 HTML+CSS+JS）
+├── startKnowledgeBase.bat  # Windows 启动脚本
+├── startKnowledgeBase.ps1  # PowerShell 启动脚本
 └── 个人知识库/            # ⚡ 知识库数据目录（Markdown 仓库）
     ├── 1-收件箱/          # 闪念笔记
     ├── 2-输入/书籍/       # 书籍笔记
@@ -64,7 +64,7 @@ python server.py
 | `vault.py` | Frontmatter 解析、文件读写、搜索、图谱 | config |
 | `templates.py` | 7 种 Markdown 模板生成 | 标准库 |
 | `handler.py` | HTTP 路由分发（GET/POST/PUT/DELETE） | config, vault, templates |
-| `知识库面板.html` | 前端所有 UI 与交互逻辑 | 后端 API |
+| `dashboard.html` | 前端所有 UI 与交互逻辑 | 后端 API |
 
 ## API 接口
 
@@ -113,4 +113,4 @@ updated: "2026-07-04 15:30"
 
 - 修改默认端口：编辑 `config.py` 中的 `PORT` 变量
 - 添加新类型：在 `config.py` 的 `DIR_TYPE`、`TYPE_DIR` 中添加映射，在 `templates.py` 中添加对应模板
-- 修改前端：直接编辑 `知识库面板.html`，无需构建工具
+- 修改前端：直接编辑 `dashboard.html`，无需构建工具
