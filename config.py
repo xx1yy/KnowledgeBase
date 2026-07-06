@@ -7,7 +7,7 @@ from pathlib import Path
 
 PORT = 16000
 VAULT_ROOT = Path(__file__).parent / "个人知识库"
-FRONTEND_FILE = Path(__file__).parent / "知识库面板.html"
+FRONTEND_FILE = Path(__file__).parent / "dashboard.html"
 
 # 目录名 → 类型映射
 DIR_TYPE = {

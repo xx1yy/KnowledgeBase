@@ -152,6 +152,20 @@ button{cursor:pointer;border:none;background:none}
 .detail-card ul{margin:8px 0 12px 20px}
 .detail-card li{font-size:14px;line-height:1.8;margin-bottom:4px}
 .note-reader-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.extract-split{display:flex;gap:16px;height:calc(100vh - 150px)}
+.extract-split-left{flex:1;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px 28px;min-width:0}
+.extract-split-right{width:400px;flex-shrink:0;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px}
+.extract-split-right .extract-step{margin-top:14px}
+.extract-split-right .extract-step:first-child{margin-top:0}
+.extract-split-left h1{font-size:19px;font-weight:700;margin-bottom:10px}
+.extract-split-left h2{font-size:15px;font-weight:700;margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.extract-split-left p{font-size:13.5px;line-height:1.8;margin-bottom:10px}
+.extract-split-left blockquote{border-left:3px solid var(--accent);padding:6px 14px;margin:10px 0;background:var(--asoft);border-radius:0 6px 6px 0;font-size:13px;color:var(--muted);line-height:1.7}
+.extract-split-left blockquote p{margin-bottom:0}
+.extract-split-left hr{border:none;border-top:1px solid var(--border);margin:18px 0}
+.extract-split-left ul{margin:6px 0 10px 18px}
+.extract-split-left li{font-size:13.5px;line-height:1.75;margin-bottom:3px}
+.extract-split-left .wl{color:var(--accent);font-weight:500}
 .note-editor{width:100%;min-height:420px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.7;resize:vertical;outline:none;font-family:inherit}
 .note-editor:focus{border-color:var(--accent);background:var(--surface)}
 .extract-step{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
@@ -755,6 +769,7 @@ function drawGraph(data){
 
 // ── 文学笔记阅读页 ──
 let currentNotePath = null;
+let currentNoteData = null;  // 保存当前笔记完整数据，供提取概念时引用
 let currentNotesView = null;  // 'book-notes' or 'video-notes'
 
 async function renderBookNotes(){
@@ -881,6 +896,7 @@ async function loadNoteContent(filepath){
   let it;
   try{ it = await get('/item?path=' + encodeURIComponent(fp)); }
   catch(e){ document.getElementById('noteReader').innerHTML = '<div class="empty">加载失败</div>'; return; }
+  currentNoteData = it;
 
   const parentName = fp.split('/').slice(-2,-1)[0] || '';
   const noteType = it.type || 'book-notes';
@@ -894,7 +910,7 @@ async function loadNoteContent(filepath){
         <span class="type-badge ${badgeCls}">${icon} ${ESC(parentName)}</span>
         ${conceptCount ? `<span class="concept-badge">💡 ${conceptCount}个概念</span>` : ''}
         <span style="font-size:11px;color:var(--faint);margin-left:auto">更新于 ${FMT(it.updated||it.mtime)}</span>
-        <button class="btn-g" onclick="showExtractConceptModal('${ESC(parentName)}', '${encodeURIComponent(fp)}')">💡 提取概念</button>
+        <button class="btn-g" onclick="showExtractConcept()">💡 提取概念</button>
         <button class="btn-g" id="noteEditBtn" onclick="toggleNoteEdit()">✏️ 编辑</button>
       </div>
       <div id="noteReadMode">
@@ -1003,44 +1019,61 @@ async function saveNoteContent(){
   }
 }
 
-// ── 提取概念弹窗 ──
-function showExtractConceptModal(bookName, notePath){
-  document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>💡 从笔记提取概念</h3><button class="modal-close" onclick="closeModal()">×</button></div>
-    <div class="modal-body">
-      <div style="margin-bottom:16px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:12px;color:var(--muted)">
-        📚 来源：<strong style="color:var(--accent)">${ESC(bookName)}</strong> · 概念将自动关联此书
-      </div>
+// ── 提取概念（内联分栏，左边笔记原文，右边概念表单）──
+function showExtractConcept(){
+  if(!currentNoteData){ alert('请先选择一篇笔记'); return; }
+  const it = currentNoteData;
+  const fp = currentNotePath;
+  const parentName = fp ? fp.split('/').slice(-2,-1)[0] || '' : '';
+  const noteType = it.type || 'book-notes';
+  const isVideo = noteType === 'video-notes';
+  const icon = isVideo ? '🎬' : '📚';
 
-      <div class="extract-step">① 原文摘录</div>
-      <textarea class="extract-area" id="xc_excerpt" style="min-height:80px;margin-bottom:4px" placeholder="粘贴你想提炼的笔记段落，作为提炼的素材"></textarea>
-      <div class="extract-hint" style="margin-bottom:16px">💡 从笔记中复制一段你觉得有价值的段落</div>
-
-      <div class="extract-step">② 概念名称</div>
-      <input class="extract-input" id="xc_name" type="text" style="margin-bottom:4px" placeholder="例：智力的可塑性" oninput="updateConceptHint()">
-      <div class="extract-hint" style="margin-bottom:16px">💡 用一个名词短语概括，不要太长</div>
-
-      <div class="extract-step">③ 一句话定义</div>
-      <input class="extract-input" id="xc_definition" type="text" style="margin-bottom:4px" placeholder="例：智力不是固定的，可以通过训练改变">
-      <div class="extract-hint" style="margin-bottom:16px">💡 不超过20字，像字典词条一样精炼</div>
-
-      <div class="extract-step">④ 核心解释</div>
-      <textarea class="extract-area" id="xc_content" style="min-height:100px;margin-bottom:4px" placeholder="展开说明这个概念，可以基于上面的摘录改写"></textarea>
-      <div class="extract-hint" style="margin-bottom:16px">💡 用自己的话解释，不要直接复制原文</div>
-
-      <div class="extract-step">⑤ 怎么用 <span style="color:var(--faint);font-weight:400">（可选）</span></div>
-      <textarea class="extract-area" id="xc_howto" style="min-height:60px;margin-bottom:4px" placeholder="这个概念在什么场景下能帮到你？"></textarea>
-      <div class="extract-hint" style="margin-bottom:16px">💡 想象一个具体场景：你在什么情况下会用到它</div>
-
-      <div class="extract-step">标签 <span style="color:var(--faint);font-weight:400">（可选）</span></div>
-      <input class="extract-input" id="xc_tags" type="text" placeholder="用逗号分隔，例：心理学, 认知">
+  document.getElementById('noteReader').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span class="type-badge ${isVideo ? 'type-video' : 'type-book'}">${icon} ${ESC(parentName)}</span>
+      <span style="font-size:13px;font-weight:600;color:var(--muted)">💡 从笔记提取概念</span>
+      <button class="btn-g" style="margin-left:auto" onclick="loadNoteContent('${encodeURIComponent(fp)}')">← 返回笔记</button>
     </div>
-    <div class="modal-foot"><button class="btn-g" onclick="closeModal()">取消</button><button class="btn-p" onclick="saveExtractedConcept('${ESC(bookName)}','${notePath}')">💡 创建概念</button></div>`;
-  document.getElementById('modalMask').classList.add('show');
-}
+    <div class="extract-split">
+      <div class="extract-split-left">
+        <h1>${ESC(it.title)}</h1>
+        ${renderNoteContent(it.content)}
+      </div>
+      <div class="extract-split-right">
+        <div style="margin-bottom:14px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted)">
+          📚 来源：<strong style="color:var(--accent)">${ESC(parentName)}</strong>
+        </div>
 
-function updateConceptHint(){
-  // reserved for future auto-suggestions
+        <div class="extract-step">① 原文摘录</div>
+        <textarea class="extract-area" id="xc_excerpt" style="min-height:70px;margin-bottom:3px" placeholder="← 从左侧笔记中选中文字复制过来"></textarea>
+        <div class="extract-hint" style="margin-bottom:12px">从左边笔记复制一段有价值的段落</div>
+
+        <div class="extract-step">② 概念名称</div>
+        <input class="extract-input" id="xc_name" type="text" style="margin-bottom:3px" placeholder="例：智力的可塑性">
+        <div class="extract-hint" style="margin-bottom:12px">用一个名词短语概括</div>
+
+        <div class="extract-step">③ 一句话定义</div>
+        <input class="extract-input" id="xc_definition" type="text" style="margin-bottom:3px" placeholder="例：智力不是固定的，可以通过训练改变">
+        <div class="extract-hint" style="margin-bottom:12px">不超过20字，像字典词条</div>
+
+        <div class="extract-step">④ 核心解释</div>
+        <textarea class="extract-area" id="xc_content" style="min-height:80px;margin-bottom:3px" placeholder="用自己的话展开说明"></textarea>
+        <div class="extract-hint" style="margin-bottom:12px">基于摘录改写，不要直接复制</div>
+
+        <div class="extract-step">⑤ 怎么用 <span style="color:var(--faint);font-weight:400">（可选）</span></div>
+        <textarea class="extract-area" id="xc_howto" style="min-height:50px;margin-bottom:3px" placeholder="什么场景下能帮到你？"></textarea>
+        <div class="extract-hint" style="margin-bottom:12px">想象一个具体场景</div>
+
+        <div class="extract-step">标签 <span style="color:var(--faint);font-weight:400">（可选）</span></div>
+        <input class="extract-input" id="xc_tags" type="text" placeholder="逗号分隔，例：心理学, 认知">
+
+        <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+          <button class="btn-g" onclick="loadNoteContent('${encodeURIComponent(fp)}')">取消</button>
+          <button class="btn-p" onclick="saveExtractedConcept('${ESC(parentName)}','${encodeURIComponent(fp)}')">💡 创建概念</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 async function saveExtractedConcept(bookName, notePath){
@@ -1081,14 +1114,13 @@ async function saveExtractedConcept(bookName, notePath){
       }
     }
 
-    closeModal();
     await loadDashboard();
     if(currentNotesView === 'video-notes'){
       await renderVideoNotes();
     } else {
       await renderBookNotes();
     }
-    if(fp) loadNoteContent(encodeURIComponent(fp));
+    if(notePath) loadNoteContent(notePath);
   }catch(e){
     alert('创建失败：' + e.message);
   }
