@@ -83,6 +83,7 @@ button{cursor:pointer;border:none;background:none}
 .badge-red{background:var(--rsoft);color:var(--red)}
 .badge-blue{background:var(--asoft);color:var(--accent)}
 .tag{font-size:10.5px;color:var(--accent);background:var(--asoft);padding:2px 7px;border-radius:5px}
+.preview-body{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
 
 .empty{text-align:center;padding:48px 20px;color:var(--faint)}
 .empty .big{font-size:36px;margin-bottom:10px}
@@ -338,6 +339,30 @@ async function renderDashboard(){
     </div>`;
 }
 
+// 轻量Markdown渲染（用于卡片预览）：去掉#标题标记、渲染行内格式、截断长度
+function renderPreviewMd(text, maxLen){
+  if(!text) return '';
+  let lines = text.split('\n').filter(l => !/^---+$/.test(l.trim())); // 去掉分割线
+  // 去掉第一行的 # 标题（通常是文件标题重复）
+  if(/^#+ /.test(lines[0])) lines.shift();
+  // 过滤掉空行过多的部分
+  let result = lines.join(' ').trim();
+  // 渲染行内格式
+  result = renderInline(result);
+  // 渲染 > 引用为斜体
+  result = result.replace(/<p>(.*?)<\/p>/g, '<em>$1</em>');
+  // 截断到maxLen字符（在HTML标签之间智能截断比较复杂，这里简单处理）
+  const tmp = document.createElement('div');
+  tmp.innerHTML = result;
+  const plain = tmp.textContent || tmp.innerText || '';
+  if(plain.length > maxLen){
+    result = plain.slice(0, maxLen) + '…';
+  } else {
+    result = tmp.innerHTML;
+  }
+  return result;
+}
+
 async function renderList(type){
   const data = await get(`/items?type=${type}`);
   // 过滤：书籍列表只显示枢纽页（type=book），文学笔记不单独显示
@@ -346,7 +371,7 @@ async function renderList(type){
   return document.getElementById('content').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${filtered.map(it=>{
-        let body = ESC((it.content||'').slice(0,120));
+        let body = renderPreviewMd(it.content, 100);
         let statusBadge = it.status ? `<span class="type-badge ${statusColor(it.status)}">${it.status}</span>` : '';
         let tags = (it.tags||[]).slice(0,3).map(t=>`<span class="tag">${ESC(t)}</span>`).join('');
         return `<div class="panel" style="cursor:pointer" onclick="openDetail('${encodeURIComponent(it.path)}')">
@@ -354,7 +379,7 @@ async function renderList(type){
             <div style="font-size:14px;font-weight:600">${ESC(it.title)}</div>
             ${it.rating>0?`<span class="stars">${'★'.repeat(it.rating)}${'☆'.repeat(5-it.rating)}</span>`:''}
           </div>
-          ${body?`<div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:10px">${body}</div>`:''}
+          ${body?`<div class="preview-body">${body}</div>`:''}
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             ${statusBadge}
             ${it.author?`<span class="type-badge badge-gray">${ESC(it.author)}</span>`:''}
@@ -394,6 +419,10 @@ async function openDetail(filepath){
   if(it.domain) html += `<div class="detail-section"><h4>领域</h4><p>${ESC(it.domain)}</p></div>`;
   if(it.content) html += `<div class="detail-section"><h4>内容</h4>${renderNoteContent(it.content)}</div>`;
   if(it.tags&&it.tags.length) html += `<div class="detail-section"><h4>标签</h4>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>`;
+  // 概念页：显示来源笔记
+  if(it.type==='concept'){
+    html += `<div class="detail-section"><h4>📖 来源笔记</h4><div class="detail-links" id="conceptSources">加载中…</div></div>`;
+  }
   // 书籍枢纽页：显示同文件夹下的文学笔记
   if(it.type==='book'){
     const allBooks = await get(`/items?type=book`);
@@ -418,6 +447,35 @@ async function openDetail(filepath){
   document.getElementById('content').innerHTML = html;
   document.getElementById('pageTitle').textContent = (t?.label||'')+' › 详情';
   document.getElementById('addBtn').style.display = 'none';
+  // 异步加载概念的来源笔记
+  if(it.type==='concept'){
+    loadSourcesForConcept(it.title);
+  }
+}
+
+// 查找哪些笔记引用了这个概念
+async function loadSourcesForConcept(conceptName){
+  const el = document.getElementById('conceptSources');
+  if(!el) return;
+  try{
+    const [bookNotes, videoNotes] = await Promise.all([
+      get('/items?type=book-notes').catch(()=>[]),
+      get('/items?type=video-notes').catch(()=>[])
+    ]);
+    const allNotes = [...(Array.isArray(bookNotes)?bookNotes:[]), ...(Array.isArray(videoNotes)?videoNotes:[])];
+    const sources = allNotes.filter(n => (n.concepts||[]).includes(conceptName));
+    if(!sources.length){
+      el.innerHTML = '<span style="color:var(--faint)">暂无关联笔记</span>';
+      return;
+    }
+    const iconMap = {'book-notes':'📝','video-notes':'📺'};
+    el.innerHTML = sources.map(n => {
+      const parent = n.path.split('/').slice(-2,-1)[0] || '未知';
+      return `<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(n.path)}')" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;margin-bottom:4px">${iconMap[n.type]||'📄'} ${ESC(parent)} — ${ESC(n.title.replace(/-文学笔记|-视频笔记/g,''))}</a>`;
+    }).join('');
+  }catch(e){
+    el.innerHTML = '<span style="color:var(--faint)">加载失败</span>';
+  }
 }
 
 async function deleteItem(filepath){
@@ -916,6 +974,7 @@ async function loadNoteContent(filepath){
       <div id="noteReadMode">
         <h1 style="font-size:21px;font-weight:700;margin-bottom:12px">${ESC(it.title)}</h1>
         ${renderNoteContent(it.content)}
+        <div id="noteConceptsSection"></div>
       </div>
       <div id="noteEditMode" style="display:none">
         <div class="field" style="margin-bottom:12px">
@@ -929,6 +988,48 @@ async function loadNoteContent(filepath){
         </div>
       </div>
     </div>`;
+
+  // 异步加载已提取的概念链接
+  if((it.concepts||[]).length > 0){
+    loadConceptsForNote(it.concepts);
+  }
+}
+
+// 根据概念名称列表，在笔记下方显示概念链接
+async function loadConceptsForNote(conceptNames){
+  if(!conceptNames || !conceptNames.length) return;
+  const section = document.getElementById('noteConceptsSection');
+  if(!section) return;
+  section.innerHTML = '<div style="padding:10px 0;color:var(--faint)">加载概念…</div>';
+  try{
+    const allConcepts = await get('/items?type=concept');
+    const matched = allConcepts.filter(c => conceptNames.some(n => n === c.title));
+    if(!matched.length){
+      section.innerHTML = '';
+      return;
+    }
+    section.innerHTML = `
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <h4 style="font-size:11.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">💡 已提取的概念</h4>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${matched.map(c => {
+            const count = (c.excerpt ? 1 : 0) + (c.definition ? 1 : 0) + (c.how_to_use ? 1 : 0);
+            const fill = count >= 3 ? 'var(--accent)' : count >= 1 ? 'var(--orange)' : 'var(--faint)';
+            const tip = count >= 3 ? '完整' : count >= 1 ? '部分' : '仅名称';
+            return `<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(c.path)}')"
+              style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--asoft);color:var(--accent);border-radius:var(--radius-sm);font-size:12.5px;font-weight:500;text-decoration:none;transition:all .12s"
+              onmouseover="this.style.background='var(--accent)';this.style.color='#fff'"
+              onmouseout="this.style.background='var(--asoft)';this.style.color='var(--accent)'"
+              title="${tip}提炼">
+              <span style="width:6px;height:6px;border-radius:50%;background:${fill};flex-shrink:0"></span>
+              ${ESC(c.title)}
+            </a>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }catch(e){
+    section.innerHTML = '';
+  }
 }
 
 function renderNoteContent(text){
