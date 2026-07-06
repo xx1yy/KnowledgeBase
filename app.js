@@ -1,5 +1,84 @@
-// App - Navigation, Modals, Search, Init
+// App - Navigation, Modals, Search, Init, Rightbar
 let currentView = 'dashboard';
+let _recentConcepts = null;
+
+// 加载最近概念（缓存）
+async function loadRecentConcepts(){
+  if(_recentConcepts) return _recentConcepts;
+  try{
+    const concepts = await get('/items?type=concept');
+    _recentConcepts = concepts.sort((a,b) => (b.mtime||0) - (a.mtime||0)).slice(0, 10);
+  }catch(e){
+    _recentConcepts = [];
+  }
+  return _recentConcepts;
+}
+
+function clearRecentConceptsCache(){ _recentConcepts = null; }
+
+// 渲染右侧快捷面板
+function renderRightbar(ctx){
+  const el = document.getElementById('rightbar');
+  if(!el) return;
+
+  let html = '';
+
+  // ── 最近概念 ──
+  html += `<div class="rightbar-section"><div class="rightbar-h">💡 最近概念</div>`;
+  if(!_recentConcepts || !_recentConcepts.length){
+    html += `<div style="font-size:11.5px;color:var(--faint);padding:4px 0">暂无概念</div>`;
+  } else {
+    _recentConcepts.slice(0, 8).forEach(c => {
+      const count = (c.excerpt ? 1 : 0) + (c.definition ? 1 : 0) + (c.how_to_use ? 1 : 0);
+      const fill = count >= 3 ? 'var(--accent)' : count >= 1 ? 'var(--orange)' : 'var(--faint)';
+      html += `<a class="rightbar-concept" href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
+        <span class="rc-dot" style="background:${fill}"></span>
+        <span class="rc-name">${ESC(c.title)}</span>
+        <span class="rc-date">${FMTREL(c.mtime)}</span>
+      </a>`;
+    });
+  }
+  html += `</div>`;
+
+  // ── 笔记概念 ──
+  if(ctx.concepts && ctx.concepts.length){
+    html += `<div class="rightbar-section">
+      <div class="rightbar-h">💡 本文概念</div>
+      ${ctx.concepts.map(c => `<a class="rightbar-concept" href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
+        <span class="rc-dot" style="background:${c.fill}"></span>
+        <span class="rc-name">${ESC(c.title)}</span>
+      </a>`).join('')}
+    </div>`;
+  }
+
+  // ── 页面操作 ──
+  if(ctx.actions && ctx.actions.length){
+    html += `<div class="rightbar-section">
+      <div class="rightbar-h">⚡ 页面操作</div>
+      <div class="rightbar-actions">
+        ${ctx.actions.map(a => {
+          if(a.type === 'danger'){
+            return `<button class="btn-g btn-danger" onclick="${a.onclick}">${a.label}</button>`;
+          }
+          if(a.type === 'primary'){
+            return `<button class="btn-p" onclick="${a.onclick}">${a.label}</button>`;
+          }
+          return `<button class="btn-g" onclick="${a.onclick}">${a.label}</button>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ── 快速信息 ──
+  if(ctx.info){
+    html += `<div class="rightbar-section">
+      <div class="rightbar-h">📋 信息</div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.7">${ctx.info}</div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
 
 function renderNav(){
   document.getElementById('nav').innerHTML = `
@@ -34,13 +113,26 @@ async function navigate(view){
   renderNav();
   const t = document.getElementById('pageTitle');
   const a = document.getElementById('addBtn');
-  if(view === 'dashboard'){ t.textContent = '仪表盘'; a.style.display='none'; renderDashboard(); return }
-  if(view === 'search'){ t.textContent = '搜索'; a.style.display='none'; renderSearch(); return }
-  if(view === 'graph'){ t.textContent = '知识图谱'; a.style.display='none'; renderGraph(); return }
-  if(view === 'book-notes'){ currentNotesView = 'book-notes'; t.textContent = '文学笔记'; a.style.display='none'; renderBookNotes(); return }
-  if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); return }
+  await loadRecentConcepts(); // 确保右侧栏有数据
+  if(view === 'dashboard'){ t.textContent = '仪表盘'; a.style.display='none'; renderDashboard(); renderRightbar({actions:[]}); return }
+  if(view === 'search'){ t.textContent = '搜索'; a.style.display='none'; renderSearch(); renderRightbar({actions:[]}); return }
+  if(view === 'graph'){ t.textContent = '知识图谱'; a.style.display='none'; renderGraph(); renderRightbar({actions:[]}); return }
+  if(view === 'book-notes'){ currentNotesView = 'book-notes'; t.textContent = '文学笔记'; a.style.display='none'; renderBookNotes(); renderRightbar({actions:[
+    {label:'＋ 新建笔记', onclick:'showAddNoteModal()', type:'primary'}
+  ]}); return }
+  if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); renderRightbar({actions:[
+    {label:'＋ 新建笔记', onclick:'showAddVideoNoteModal()', type:'primary'}
+  ]}); return }
   const ti = TYPE_MAP[view];
-  if(ti){ t.textContent = ti.label; a.style.display='inline-flex'; renderList(view); return }
+  if(ti){
+    t.textContent = ti.label;
+    a.style.display='inline-flex';
+    renderList(view);
+    renderRightbar({actions:[
+      {label:'＋ 新建', onclick:`openQuickCapture('${view}')`, type:'primary'}
+    ]});
+    return
+  }
 }
 
 async function openDetail(filepath){
@@ -83,7 +175,6 @@ async function openDetail(filepath){
   html += `<div class="detail-section"><h4>链接</h4><div class="detail-links">${(it.links||[]).map(l=>`<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(l)}.md')">[[${ESC(l)}]]</a>`).join(' · ')||'无'}</div></div>`;
   if(it.backlinks&&it.backlinks.length) html += `<div class="detail-section"><h4>被以下引用</h4><div class="detail-links">${it.backlinks.map(bl=>`<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(bl.path)}')">← ${ESC(bl.title)} (${TYPE_MAP[bl.type]?.label||bl.type})</a>`).join(' · ')}</div></div>`;
   html += `<div class="detail-meta" style="font-size:11px;color:var(--faint)">创建于 ${FMT(it.created)} · 更新于 ${FMT(it.updated)} · 文件: ${it.path}</div>`;
-  html += `<div class="detail-actions"><button class="btn-p" onclick="openEdit('${encodeURIComponent(it.path)}')">✏️ 编辑</button><button class="btn-g btn-danger" onclick="deleteItem('${encodeURIComponent(it.path)}')">🗑 删除</button></div>`;
   html += `</div></div>`;
   document.getElementById('content').innerHTML = html;
   document.getElementById('pageTitle').textContent = (t?.label||'')+' › 详情';
@@ -91,6 +182,21 @@ async function openDetail(filepath){
   if(it.type==='concept'){
     loadSourcesForConcept(it.title);
   }
+  // 更新右侧栏
+  const infoLines = [];
+  if(it.author) infoLines.push(`作者：${it.author}`);
+  if(it.source) infoLines.push(`来源：${it.source}`);
+  if(it.status) infoLines.push(`状态：${it.status}`);
+  if(it.rating > 0) infoLines.push(`评分：${'★'.repeat(it.rating)}`);
+  if(it.domain) infoLines.push(`领域：${it.domain}`);
+  if(it.concepts && it.concepts.length) infoLines.push(`相关概念：${it.concepts.length}个`);
+  renderRightbar({
+    actions: [
+      {label:'✏️ 编辑', onclick:`openEdit('${encodeURIComponent(it.path)}')`},
+      {label:'🗑 删除', onclick:`deleteItem('${encodeURIComponent(it.path)}')`, type:'danger'}
+    ],
+    info: infoLines.join('<br>') || null
+  });
 }
 
 async function deleteItem(filepath){
@@ -129,16 +235,18 @@ async function saveEdit(filepath){
   await put('/item', {path: fp, ...data});
   closeModal();
   await loadDashboard();
+  clearRecentConceptsCache();
+  await loadRecentConcepts();
   openDetail(filepath);
 }
 
-function openQuickCapture(){
+function openQuickCapture(preselectType){
   const types = [
     {k:'book',l:'书籍',i:'📚'},{k:'video',l:'视频',i:'🎬'},
     {k:'concept',l:'概念',i:'💡'},{k:'reflection',l:'反思',i:'💭'},
     {k:'problem',l:'问题',i:'❓'},{k:'plan',l:'计划',i:'🎯'},
   ];
-  const opts = types.map(t=>`<option value="${t.k}">${t.i} ${t.l}</option>`).join('');
+  const opts = types.map(t=>`<option value="${t.k}" ${t.k===preselectType?'selected':''}>${t.i} ${t.l}</option>`).join('');
   document.getElementById('modal').innerHTML = `
     <div class="modal-head"><h3>📝 快速记录</h3><button class="modal-close" onclick="closeModal()">×</button></div>
     <div class="modal-body">
@@ -381,8 +489,10 @@ document.getElementById('searchBox').addEventListener('input', function(){
 (async function init(){
   try{
     await loadDashboard();
+    await loadRecentConcepts();
     renderNav();
     renderDashboard();
+    renderRightbar({actions:[]});
   }catch(e){
     document.getElementById('content').innerHTML =
       '<div class="empty"><div class="big">🔴</div>无法连接服务<p style="margin-top:10px;color:var(--faint)">请先双击运行「启动知识库.bat」</p></div>';

@@ -25,7 +25,10 @@
     </div>
     <button class="btn-p" id="addBtn" onclick="openQuickCapture()" style="display:none">+ 快速记录</button>
   </header>
-  <div class="content" id="content"></div>
+  <div style="display:flex;flex:1;overflow:hidden">
+    <div class="content" id="content"></div>
+    <aside class="rightbar" id="rightbar"></aside>
+  </div>
 </div>
 </div>
 <div class="modal-mask" id="modalMask" onclick="if(event.target===this)closeModal()">

@@ -158,8 +158,6 @@ async function loadNoteContent(filepath){
         <span class="type-badge ${badgeCls}">${icon} ${ESC(parentName)}</span>
         ${conceptCount ? `<span class="concept-badge">💡 ${conceptCount}个概念</span>` : ''}
         <span style="font-size:11px;color:var(--faint);margin-left:auto">更新于 ${FMT(it.updated||it.mtime)}</span>
-        <button class="btn-g" onclick="showExtractConcept()">💡 提取概念</button>
-        <button class="btn-g" id="noteEditBtn" onclick="toggleNoteEdit()">✏️ 编辑</button>
       </div>
       <div id="noteReadMode">
         <h1 style="font-size:21px;font-weight:700;margin-bottom:12px">${ESC(it.title)}</h1>
@@ -179,9 +177,12 @@ async function loadNoteContent(filepath){
       </div>
     </div>`;
 
-  if((it.concepts||[]).length > 0){
-    loadConceptsForNote(it.concepts);
+  // 加载概念到主内容区和右侧栏
+  const conceptNames = it.concepts || [];
+  if(conceptNames.length > 0){
+    loadConceptsForNote(conceptNames);
   }
+  refreshNoteRightbar(conceptNames, fp, isVideo, parentName, conceptCount, it);
 }
 
 async function loadConceptsForNote(conceptNames){
@@ -220,16 +221,38 @@ async function loadConceptsForNote(conceptNames){
   }
 }
 
+async function refreshNoteRightbar(conceptNames, fp, isVideo, parentName, conceptCount, it){
+  const actions = [
+    {label:'💡 提取概念', onclick:'showExtractConcept()', type:'primary'},
+    {label:'✏️ 编辑笔记', onclick:'toggleNoteEdit()'},
+    {label:'🗑 删除笔记', onclick:`deleteItem('${encodeURIComponent(fp)}')`, type:'danger'}
+  ];
+  const info = `类型：${isVideo?'视频笔记':'文学笔记'}<br>来源：${parentName}<br>概念：${conceptCount}个<br>更新：${FMT(it.updated||it.mtime)}`;
+
+  let conceptItems = [];
+  if(conceptNames.length > 0){
+    try{
+      const allConcepts = await get('/items?type=concept');
+      const matched = allConcepts.filter(c => conceptNames.includes(c.title));
+      conceptItems = matched.map(c => {
+        const count = (c.excerpt ? 1 : 0) + (c.definition ? 1 : 0) + (c.how_to_use ? 1 : 0);
+        const fill = count >= 3 ? 'var(--accent)' : count >= 1 ? 'var(--orange)' : 'var(--faint)';
+        return {path: c.path, title: c.title, fill};
+      });
+    }catch(e){}
+  }
+
+  renderRightbar({actions, concepts: conceptItems, info});
+}
+
 function toggleNoteEdit(){
   document.getElementById('noteReadMode').style.display = 'none';
   document.getElementById('noteEditMode').style.display = 'block';
-  document.getElementById('noteEditBtn').style.display = 'none';
 }
 
 function cancelNoteEdit(){
   document.getElementById('noteReadMode').style.display = 'block';
   document.getElementById('noteEditMode').style.display = 'none';
-  document.getElementById('noteEditBtn').style.display = 'inline-flex';
 }
 
 async function saveNoteContent(){
@@ -263,11 +286,19 @@ function showExtractConcept(){
   const isVideo = noteType === 'video-notes';
   const icon = isVideo ? '🎬' : '📚';
 
+  // 更新右侧栏
+  renderRightbar({
+    actions: [
+      {label:'← 返回笔记', onclick:`loadNoteContent('${encodeURIComponent(fp)}')`},
+      {label:'💡 创建概念', onclick:`saveExtractedConcept('${ESC(parentName)}','${encodeURIComponent(fp)}')`, type:'primary'}
+    ],
+    info: `来源：${parentName}<br>步骤：①摘录 → ②命名 → ③定义 → ④解释 → ⑤用法`
+  });
+
   document.getElementById('noteReader').innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span class="type-badge ${isVideo ? 'type-video' : 'type-book'}">${icon} ${ESC(parentName)}</span>
       <span style="font-size:13px;font-weight:600;color:var(--muted)">💡 从笔记提取概念</span>
-      <button class="btn-g" style="margin-left:auto" onclick="loadNoteContent('${encodeURIComponent(fp)}')">← 返回笔记</button>
     </div>
     <div class="extract-split">
       <div class="extract-split-left">
@@ -301,11 +332,6 @@ function showExtractConcept(){
 
         <div class="extract-step">标签 <span style="color:var(--faint);font-weight:400">（可选）</span></div>
         <input class="extract-input" id="xc_tags" type="text" placeholder="逗号分隔，例：心理学, 认知">
-
-        <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
-          <button class="btn-g" onclick="loadNoteContent('${encodeURIComponent(fp)}')">取消</button>
-          <button class="btn-p" onclick="saveExtractedConcept('${ESC(parentName)}','${encodeURIComponent(fp)}')">💡 创建概念</button>
-        </div>
       </div>
     </div>`;
 }
@@ -347,6 +373,8 @@ async function saveExtractedConcept(bookName, notePath){
     }
 
     await loadDashboard();
+    clearRecentConceptsCache();
+    await loadRecentConcepts();
     if(currentNotesView === 'video-notes'){
       await renderVideoNotes();
     } else {
