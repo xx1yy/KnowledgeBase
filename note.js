@@ -21,7 +21,7 @@ async function loadSourcesForConcept(conceptName){
     const iconMap = {'book-notes':'📝','video-notes':'📺'};
     el.innerHTML = sources.map(n => {
       const parent = n.path.split('/').slice(-2,-1)[0] || '未知';
-      return `<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(n.path)}')" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;margin-bottom:4px">${iconMap[n.type]||'📄'} ${ESC(parent)} — ${ESC(n.title.replace(/-文学笔记|-视频笔记/g,''))}</a>`;
+      return `<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(n.path)}')" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;margin-bottom:4px">${iconMap[n.type]||'📄'} ${ESC(parent)} — ${ESC(String(n.title||'').replace(/-文学笔记|-视频笔记/g,''))}</a>`;
     }).join('');
   }catch(e){
     el.innerHTML = '<span style="color:var(--faint)">加载失败</span>';
@@ -104,7 +104,7 @@ function noteItemHtml(n){
   const cc = (n.concepts||[]).length;
   const fp = n.path.replace(/[^a-zA-Z0-9]/g, '');
   return `<div class="note-item" id="ni-${fp}" onclick="loadNoteContent('${encodeURIComponent(n.path)}')">
-    <div class="nt">${ESC(n.title.replace(/-文学笔记$/,''))}${cc?`<span class="concept-badge">💡${cc}</span>`:''}</div>
+    <div class="nt">${ESC(String(n.title||'').replace(/-文学笔记$/,''))}${cc?`<span class="concept-badge">💡${cc}</span>`:''}</div>
     <div class="nd">${FMTREL(n.mtime)}</div>
   </div>`;
 }
@@ -197,7 +197,7 @@ async function renderVideoNotes(){
               const cc = (n.concepts||[]).length;
               return `
               <div class="note-item" id="ni-${n.path.replace(/[^a-zA-Z0-9]/g,'')}" onclick="loadNoteContent('${encodeURIComponent(n.path)}')">
-                <div class="nt">${ESC(n.title.replace(/-视频笔记$/,''))}${cc?`<span class="concept-badge">💡${cc}</span>`:''}</div>
+                <div class="nt">${ESC(String(n.title||'').replace(/-视频笔记$/,''))}${cc?`<span class="concept-badge">💡${cc}</span>`:''}</div>
                 <div class="nd">${FMTREL(n.mtime)}</div>
               </div>`;
             }).join('')}

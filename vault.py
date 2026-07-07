@@ -34,6 +34,9 @@ def parse_frontmatter(text):
             if (val.startswith('"') and val.endswith('"')) or \
                (val.startswith("'") and val.endswith("'")):
                 val = val[1:-1]
+                quoted = True
+            else:
+                quoted = False
             # [[wikilink]] 不是数组，是字符串
             if val.startswith('[[') and val.endswith(']]'):
                 fm[key] = val
@@ -48,6 +51,9 @@ def parse_frontmatter(text):
                 fm[key] = False
             elif val == 'null' or val == '':
                 fm[key] = None
+            elif quoted:
+                # 显式带引号的值一律按字符串保留（如 "04" 不被 int() 成 4）
+                fm[key] = val
             else:
                 try:
                     fm[key] = int(val)
