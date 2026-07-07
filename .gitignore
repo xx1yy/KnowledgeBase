@@ -9,6 +9,7 @@ server_port.txt
 # ============ IDE / 编辑器配置 ============
 .claude/
 .workbuddy/
+.idea/
 
 # ============ 系统异常文件 ============
 nul
