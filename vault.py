@@ -133,6 +133,7 @@ def item_from_file(filepath):
         'rating': fm.get('rating', 0),
         'progress': fm.get('progress', 0),
         'domain': fm.get('domain', ''),
+        'chapter': fm.get('chapter', ''),
         'tags': tags,
         'concepts': concepts,
         'mood': fm.get('mood', ''),

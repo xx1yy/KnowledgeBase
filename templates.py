@@ -65,6 +65,7 @@ updated: "{now}"
 type: book-notes
 title: "{title}"
 parent: "[[{data.get('parent', title)}]]"
+chapter: "{data.get('chapter', '')}"
 created: "{now}"
 updated: "{now}"
 ---

@@ -29,11 +29,28 @@ function mdRenderTable(rows){
   return h + '</tbody></table>';
 }
 
+// ── Obsidian 风格 callout 标注框支持 ──
+const CALLOUT_META = {
+  note:    {icon:'📝', title:'笔记',   color:'#5468ff', soft:'#eef0ff'},
+  info:    {icon:'ℹ️', title:'信息',   color:'#3b82f6', soft:'#e8f1ff'},
+  tip:     {icon:'💡', title:'提示',   color:'#d97706', soft:'#fff3e0'},
+  success: {icon:'✅', title:'成功',   color:'#16a34a', soft:'#e7f6ec'},
+  question:{icon:'❓', title:'问题',   color:'#8b5cf6', soft:'#f1ebff'},
+  warning: {icon:'⚠️', title:'警告',   color:'#d97706', soft:'#fff3e0'},
+  failure: {icon:'❌', title:'失败',   color:'#dc2626', soft:'#ffeaea'},
+  danger:  {icon:'🚨', title:'危险',   color:'#dc2626', soft:'#ffeaea'},
+  bug:     {icon:'🐛', title:'缺陷',   color:'#db2777', soft:'#ffe9f3'},
+  example: {icon:'📌', title:'示例',   color:'#0891b2', soft:'#e0f7fb'},
+  quote:   {icon:'❝', title:'引用',   color:'#64748b', soft:'#eef1f5'},
+  abstract:{icon:'📄', title:'摘要',   color:'#0891b2', soft:'#e0f7fb'},
+};
+
 function renderNoteContent(text){
   if(!text || !text.trim()) return '<p style="color:var(--faint)">暂无内容，点击「编辑」开始记录</p>';
   const lines = text.split('\n');
   let html = '';
   let inList = false, inQuote = false, tableBuf = [];
+  const callout = {active:false, type:'note', fold:'', title:'', buf:[]};
   function closeBlocks(){
     if(inList){ html += '</ul>'; inList = false; }
     if(inQuote){ html += '</blockquote>'; inQuote = false; }
@@ -46,6 +63,19 @@ function renderNoteContent(text){
     }
     tableBuf = [];
   }
+  function flushCallout(){
+    if(!callout.active) return;
+    const meta = CALLOUT_META[callout.type] || {icon:'💡', title:callout.type, color:'var(--accent)', soft:'var(--asoft)'};
+    const title = callout.title || meta.title;
+    const inner = callout.buf.length ? renderNoteContent(callout.buf.join('\n')) : '';
+    if(callout.fold){
+      html += `<details class="md-callout ${callout.type}"${callout.fold==='+'?' open':''}><summary><span class="ci">${meta.icon}</span><span class="ct">${renderInline(title)}</span></summary>${inner}</details>`;
+    } else {
+      html += `<div class="md-callout ${callout.type}"><div class="cc-head"><span class="ci">${meta.icon}</span><span class="ct">${renderInline(title)}</span></div>${inner}</div>`;
+    }
+    callout.active = false;
+    callout.buf = [];
+  }
   for(let line of lines){
     const t = line.trim();
     // 表格行：含 | 则累积，遇非表格行再 flush
@@ -56,6 +86,29 @@ function renderNoteContent(text){
       continue;
     }
     if(tableBuf.length) flushTable();
+
+    // ── Callout 标注框（Obsidian 语法 > [!type][+/-] 标题）──
+    const cm = t.match(/^>\s*\[!(\w+)\]([-+]?)\s*(.*)$/);
+    if(cm){
+      if(inList){ html += '</ul>'; inList = false; }
+      if(inQuote){ html += '</blockquote>'; inQuote = false; }
+      flushCallout();
+      callout.active = true;
+      callout.type = cm[1].toLowerCase();
+      callout.fold = cm[2];
+      callout.title = cm[3].trim();
+      callout.buf = [];
+      continue;
+    }
+    if(callout.active){
+      if(/^>/.test(t)){
+        callout.buf.push(t === '>' ? '' : t.slice(1).trim());
+        continue;
+      }
+      flushCallout();
+      // 非 > 行：结束标注框，按普通行继续处理
+    }
+
     if(/^# [^#]/.test(t)){
       closeBlocks(); html += `<h1>${renderInline(t.slice(2))}</h1>`;
     } else if(/^## /.test(t)){
@@ -77,6 +130,7 @@ function renderNoteContent(text){
     }
   }
   if(tableBuf.length) flushTable();
+  flushCallout();
   if(inList) html += '</ul>';
   if(inQuote) html += '</blockquote>';
   return html;
@@ -86,7 +140,14 @@ function renderPreviewMd(text, maxLen){
   if(!text) return '';
   let lines = text.split('\n').filter(l => {
     const lt = l.trim();
-    return !/^---+$/.test(lt) && !/^\|.*\|$/.test(lt) && !mdIsSeparator(lt);
+    if(/^---+$/.test(lt)) return false;
+    if(/^\|.*\|$/.test(lt)) return false;
+    if(mdIsSeparator(lt)) return false;
+    if(/^>\s*\[!(\w+)\]/.test(lt)) return false; // 跳过 callout 头
+    return true;
+  }).map(l => {                                   // 去掉 callout 正文行的前导 >
+    const lt = l.trim();
+    return lt.startsWith('>') ? l.replace(/^>\s?/, '') : l;
   });
   if(/^#+ /.test(lines[0])) lines.shift();
   let result = lines.join(' ').trim();

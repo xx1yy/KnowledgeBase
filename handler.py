@@ -471,7 +471,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         updatable = ['status', 'priority', 'rating', 'progress',
                      'mood', 'finish_date', 'watch_date', 'due_date',
                      'tags', 'title', 'author', 'source', 'url', 'domain',
-                     'concepts']
+                     'concepts', 'chapter']
         for key in updatable:
             if key in data:
                 fm[key] = data[key]

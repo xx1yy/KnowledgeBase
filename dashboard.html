@@ -14,11 +14,15 @@
     <div><div class="brand-text">个人知识库</div><div class="brand-sub">My Knowledge OS</div></div>
   </div>
   <nav class="nav" id="nav"></nav>
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="收起/展开侧栏">
+    <span class="st-ico">«</span><span class="st-txt">收起侧栏</span>
+  </button>
 </aside>
 <div class="main">
   <header class="topbar">
     <h1 id="pageTitle">仪表盘</h1>
     <span id="apiStatus" style="font-size:12px;margin-left:8px"></span>
+    <button class="btn-g" id="rightbarReveal" onclick="toggleRightbar()" title="显示右侧栏">☰ 侧栏</button>
     <div class="search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" id="searchBox" placeholder="搜索全部内容…">
@@ -27,7 +31,12 @@
   </header>
   <div style="display:flex;flex:1;overflow:hidden">
     <div class="content" id="content"></div>
-    <aside class="rightbar" id="rightbar"></aside>
+    <aside class="rightbar" id="rightbar">
+      <div class="rightbar-head">
+        <button class="rightbar-toggle" onclick="toggleRightbar()" title="收起右侧栏">▸</button>
+      </div>
+      <div class="rightbar-body" id="rightbarBody"></div>
+    </aside>
   </div>
 </div>
 </div>

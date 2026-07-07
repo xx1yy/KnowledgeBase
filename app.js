@@ -43,7 +43,7 @@ window.addEventListener('popstate', (e)=> applyRoute(e.state));
 
 // 渲染右侧快捷面板
 function renderRightbar(ctx){
-  const el = document.getElementById('rightbar');
+  const el = document.getElementById('rightbarBody');
   if(!el) return;
 
   let html = '';
@@ -351,6 +351,11 @@ function showAddNoteModal(){
         <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">笔记标题</label>
         <input id="noteTitleInput" type="text" placeholder="文学笔记标题" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none">
       </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">章节（可选）</label>
+        <input id="noteChapterInput" list="noteChapterList" type="text" placeholder="如：第3章 记忆（留空归入「未分章」）" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none">
+        <datalist id="noteChapterList"></datalist>
+      </div>
       <div class="form-group">
         <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">初始内容（可选）</label>
         <textarea id="noteContentInput" placeholder="摘录、金句、随手笔记…" style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;resize:vertical;outline:none;font-family:inherit"></textarea>
@@ -363,6 +368,34 @@ function showAddNoteModal(){
     document.getElementById('noteBookSelect').selectedIndex = 1;
     onNoteBookChange();
   }
+  updateChapterSuggestions();
+}
+
+// 章节备选：按所选书籍去重，避免重复选项
+function updateChapterSuggestions(){
+  const sel = document.getElementById('noteBookSelect');
+  const dl = document.getElementById('noteChapterList');
+  if(!dl || !sel) return;
+  const books = window._bookList || [];
+  const notes = window._allBookNotes || [];
+  let folder = null;
+  if(sel.value && sel.value !== '__new__'){
+    const b = books.find(x => x.title === sel.value);
+    folder = b ? b.path.split('/').slice(-2, -1)[0] : null;
+  }
+  const seen = new Set();
+  const opts = [];
+  for(const n of notes){
+    if(!n.chapter) continue;
+    if(folder){
+      const nf = n.path.split('/').slice(-2, -1)[0];
+      if(nf !== folder) continue;
+    }
+    if(seen.has(n.chapter)) continue;
+    seen.add(n.chapter);
+    opts.push(`<option value="${ESC(n.chapter)}">`);
+  }
+  dl.innerHTML = opts.join('');
 }
 
 function onNoteBookChange(){
@@ -376,6 +409,7 @@ function onNoteBookChange(){
     input.style.display = 'none';
     autoFillNoteTitle();
   }
+  updateChapterSuggestions();
 }
 
 function autoFillNoteTitle(){
@@ -403,9 +437,10 @@ async function saveNewNote(){
   }
   const title = document.getElementById('noteTitleInput').value.trim() || (parent + '-文学笔记');
   const content = document.getElementById('noteContentInput').value.trim();
+  const chapter = document.getElementById('noteChapterInput').value.trim();
 
   try{
-    await post('/item', {type:'book-notes', title:title, parent:parent, content:content});
+    await post('/item', {type:'book-notes', title:title, parent:parent, content:content, chapter:chapter});
     closeModal();
     await loadDashboard();
     await renderBookNotes();
@@ -520,9 +555,21 @@ document.getElementById('searchBox').addEventListener('input', function(){
   if(currentView==='search') renderSearch();
 });
 
+// 侧栏折叠（状态持久化到 localStorage）
+function toggleSidebar(){
+  document.body.classList.toggle('sidebar-collapsed');
+  try{ localStorage.setItem('kb_sidebar', document.body.classList.contains('sidebar-collapsed')?'1':'0'); }catch(e){}
+}
+function toggleRightbar(){
+  document.body.classList.toggle('rightbar-collapsed');
+  try{ localStorage.setItem('kb_rightbar', document.body.classList.contains('rightbar-collapsed')?'1':'0'); }catch(e){}
+}
+
 // 启动
 (async function init(){
   try{
+    if(localStorage.getItem('kb_sidebar')==='1') document.body.classList.add('sidebar-collapsed');
+    if(localStorage.getItem('kb_rightbar')==='1') document.body.classList.add('rightbar-collapsed');
     await loadDashboard();
     await loadRecentConcepts();
     renderNav();

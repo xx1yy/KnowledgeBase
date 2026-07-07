@@ -3,6 +3,9 @@
   --text:#1a1d2e;--muted:#7a8194;--faint:#a9aec2;
   --accent:#5468ff;--asoft:#eef0ff;--ahover:#4456e6;
   --green:#22b07d;--gsoft:#e6f7f0;--orange:#f5a623;--osoft:#fdf3e2;
+  /* Obsidian 官方 callout 配色（HSL 通道，便于做浅色底纹） */
+  --co-blue:220,67%,58%; --co-cyan:175,70%,41%; --co-green:135,55%,45%;
+  --co-purple:270,65%,60%; --co-orange:28,85%,55%; --co-red:358,70%,55%; --co-gray:220,9%,55%; --co-gold:42,90%,52%;
   --red:#ef4d63;--rsoft:#fdecef;
   --shadow:0 1px 3px rgba(26,29,46,.06),0 1px 2px rgba(26,29,46,.04);
   --shadow-lg:0 8px 28px rgba(26,29,46,.12);
@@ -31,6 +34,24 @@ button{cursor:pointer;border:none;background:none}
 .nav-item.active .nav-n{background:rgba(255,255,255,.25);color:#fff}
 .nav-i{font-size:15px;width:20px;text-align:center;flex-shrink:0}
 .nav-n{margin-left:auto;background:var(--border);color:var(--muted);font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:20px;min-width:20px;text-align:center}
+
+/* 侧栏折叠按钮 */
+.sidebar-toggle{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px 10px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;font-weight:500;width:100%;text-align:left}
+.sidebar-toggle:hover{background:var(--asoft);color:var(--text)}
+.sidebar-toggle .st-ico{font-size:16px;width:20px;text-align:center;flex-shrink:0;transition:transform .15s}
+.sidebar-toggle .st-txt{white-space:nowrap}
+body.sidebar-collapsed .sidebar{width:52px}
+body.sidebar-collapsed .brand-text,
+body.sidebar-collapsed .brand-sub,
+body.sidebar-collapsed .nav-label,
+body.sidebar-collapsed .nav-n,
+body.sidebar-collapsed .nav-item span:not(.nav-i),
+body.sidebar-collapsed .st-txt{display:none}
+body.sidebar-collapsed .sidebar-toggle{justify-content:center;padding:12px 0}
+body.sidebar-collapsed .sidebar-toggle .st-ico{transform:rotate(180deg)}
+body.sidebar-collapsed .brand{justify-content:center;padding:20px 0 16px}
+body.sidebar-collapsed .nav{padding:8px 6px}
+body.sidebar-collapsed .nav-item{padding:9px 0;justify-content:center;gap:0}
 
 .topbar{height:56px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:16px;flex-shrink:0}
 .topbar h1{font-size:16px;font-weight:700}
@@ -84,6 +105,32 @@ button{cursor:pointer;border:none;background:none}
 .md-table tr:nth-child(even) td{background:#fafbff}
 .md-table tr:hover td{background:var(--asoft)}
 
+/* ── Callout 标注框（Obsidian 配色）── */
+.md-callout{--co:var(--co-blue);border:1px solid hsl(var(--co), .28);border-left:4px solid hsl(var(--co));background:hsl(var(--co), .1);border-radius:var(--radius-sm);padding:12px 16px;margin:14px 0;font-size:13.5px;line-height:1.7;color:var(--text)}
+.md-callout .cc-head{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px}
+.md-callout details,.md-callout summary{outline:none}
+.md-callout summary{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;list-style:none;color:var(--text)}
+.md-callout summary::-webkit-details-marker{display:none}
+.md-callout summary .ci{font-size:14px}
+.md-callout summary::after{content:'▸';margin-left:auto;color:hsl(var(--co), .7);transition:transform .15s;font-size:11px}
+.md-callout details[open] summary::after{transform:rotate(90deg)}
+.md-callout .ci{font-size:14px;flex-shrink:0;color:hsl(var(--co))}
+.md-callout .ct{font-weight:700;color:hsl(var(--co))}
+.md-callout p{margin:6px 0;color:var(--text)}
+.md-callout p:first-child{margin-top:0}
+.md-callout p:last-child{margin-bottom:0}
+/* 按类型映射 Obsidian 官方配色（与引用块 accent 区分） */
+.md-callout.note{--co:var(--co-blue)}
+.md-callout.info{--co:var(--co-blue)}
+.md-callout.abstract{--co:var(--co-cyan)}
+.md-callout.tip{--co:var(--co-green)}
+.md-callout.success{--co:var(--co-green)}
+.md-callout.question{--co:var(--co-gold)}
+.md-callout.example{--co:var(--co-purple)}
+.md-callout.warning{--co:var(--co-orange)}
+.md-callout.failure,.md-callout.danger,.md-callout.bug{--co:var(--co-red)}
+.md-callout.quote{--co:var(--co-gray)}
+
 /* 标签云 */
 .tag-cloud{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .tag-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;cursor:default;transition:all .12s;line-height:1}
@@ -134,9 +181,49 @@ button{cursor:pointer;border:none;background:none}
 .graph-container{width:100%;height:500px;position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .graph-container canvas{width:100%;height:100%}
 
-.notes-layout{display:flex;gap:16px;height:calc(100vh - 100px)}
-.notes-sidebar{width:260px;flex-shrink:0;overflow-y:auto;padding-right:2px}
+.notes-layout{display:flex;gap:14px;height:calc(100vh - 100px)}
+.notes-sidebar{width:200px;flex-shrink:0;overflow-y:auto;padding-right:2px}
+.chapter-bar{width:240px;flex-shrink:0;overflow-y:auto;padding-left:12px;padding-right:8px;border-left:1px solid var(--border)}
 .notes-reader{flex:1;overflow-y:auto}
+.book-item{display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;transition:background .1s;margin-bottom:2px;font-size:13.5px;font-weight:500}
+.book-item:hover{background:var(--bg)}
+.book-item.active{background:var(--asoft);color:var(--accent)}
+.book-item .bi{flex-shrink:0}
+.book-item .bt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.book-item .bc{font-size:10.5px;color:var(--faint);background:var(--bg);padding:1px 7px;border-radius:8px;flex-shrink:0}
+.chapter-bar-h{font-size:13px;font-weight:700;color:var(--text);padding:4px 2px 2px;display:flex;align-items:center;gap:5px}
+.chapter-bar-sub{font-size:11px;color:var(--faint);padding:0 2px 8px;margin-bottom:6px;border-bottom:1px solid var(--border)}
+.chapter-group{margin-bottom:12px}
+.chapter-h2{font-size:11.5px;font-weight:700;color:var(--accent);padding:6px 8px;display:flex;align-items:center;gap:5px;position:sticky;top:0;background:var(--surface)}
+.chapter-h2 .ch-dot{flex-shrink:0}
+.chapter-h2 .ch-count{margin-left:auto;font-size:10px;color:var(--faint);background:var(--asoft);padding:1px 7px;border-radius:8px;font-weight:600}
+.chapter-empty{font-size:12.5px;color:var(--faint);padding:20px 8px;text-align:center}
+
+/* 笔记内栏折叠（书籍栏 / 章节栏） */
+.nb-head{display:flex;justify-content:flex-end;margin-bottom:6px}
+.nb-toggle,.ch-toggle{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;background:transparent;transition:transform .15s}
+.nb-toggle:hover,.ch-toggle:hover{background:var(--asoft);color:var(--text)}
+.notes-layout.books-collapsed #bookList{width:48px}
+.notes-layout.books-collapsed #bookList .btn-p,
+.notes-layout.books-collapsed #bookList .distill-summary{display:none}
+.notes-layout.books-collapsed .nb-head{justify-content:center;margin-bottom:8px}
+.notes-layout.books-collapsed .nb-toggle{transform:rotate(180deg)}
+.notes-layout.books-collapsed .book-item{padding:8px 0;justify-content:center}
+.notes-layout.books-collapsed .book-item .bt,
+.notes-layout.books-collapsed .book-item .bc{display:none}
+.notes-layout.chapters-collapsed #chapterBar{width:44px;overflow:hidden;padding-left:0;padding-right:0}
+.notes-layout.chapters-collapsed .chapter-bar-h{justify-content:center;padding:4px 0 2px}
+.notes-layout.chapters-collapsed .chapter-bar-h .cb-title,
+.notes-layout.chapters-collapsed .chapter-bar-sub,
+.notes-layout.chapters-collapsed .chapter-h2 .ch-name,
+.notes-layout.chapters-collapsed .chapter-h2 .ch-count,
+.notes-layout.chapters-collapsed .note-item{display:none}
+.notes-layout.chapters-collapsed .chapter-h2{justify-content:center;padding:8px 0;cursor:pointer}
+.notes-layout.chapters-collapsed .chapter-h2 .ch-dot{font-size:16px}
+.notes-layout.chapters-collapsed .chapter-group{margin:0}
+.notes-layout.chapters-collapsed .ch-toggle{transform:rotate(180deg)}
+.notes-layout.chapters-collapsed .chapter-bar-h .ch-toggle{margin-left:0}
+.badge-gray{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
 .note-group{margin-bottom:14px}
 .note-group-h{font-size:11.5px;font-weight:700;color:var(--accent);padding:8px 10px 4px;display:flex;align-items:center;gap:5px}
 .note-item{padding:8px 12px;border-radius:var(--radius-sm);cursor:pointer;transition:background .1s;margin-bottom:2px}
@@ -195,7 +282,14 @@ button{cursor:pointer;border:none;background:none}
 }
 
 /* Right sidebar — 右侧快捷面板 */
-.rightbar{width:250px;background:var(--sidebar);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:16px 14px}
+.rightbar{width:250px;background:var(--sidebar);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.rightbar-head{display:flex;justify-content:flex-end;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.rightbar-toggle{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
+.rightbar-toggle:hover{background:var(--asoft);color:var(--text)}
+.rightbar-body{flex:1;overflow-y:auto;padding:16px 14px}
+body.rightbar-collapsed .rightbar{display:none}
+body.rightbar-collapsed #rightbarReveal{display:inline-flex}
+#rightbarReveal{display:none;margin-left:8px}
 .rightbar-section{margin-bottom:16px}
 .rightbar-section:last-child{margin-bottom:0}
 .rightbar-h{font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:5px}
