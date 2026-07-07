@@ -8,6 +8,7 @@ import time
 import traceback
 import urllib.parse
 import shutil
+import re
 from pathlib import Path
 
 from config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log
@@ -89,6 +90,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # API: 获取某类型所有条目
             if path == '/api/items':
                 self._handle_items(params)
+                return
+
+            # API: 标签统计
+            if path == '/api/tags':
+                self._handle_tags()
                 return
 
             # API: 获取单个文件
@@ -198,6 +204,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except Exception as e2:
                     log(f"ERROR reading {f}: {e2}")
                     traceback.print_exc()
+        # 统计标签总数
+        all_tags = set()
+        for d in DIR_TYPE:
+            for f in list_md_files(d):
+                try:
+                    fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
+                    tags = fm.get('tags', [])
+                    if not isinstance(tags, list):
+                        if isinstance(tags, str) and tags:
+                            tags = [t.strip() for t in re.split(r'[,，、]', tags) if t.strip()]
+                        else:
+                            tags = []
+                    for tg in tags:
+                        if tg:
+                            all_tags.add(tg)
+                except Exception:
+                    pass
+        counts['tagCount'] = len(all_tags)
         recent_all.sort(key=lambda x: x['mtime'], reverse=True)
         self._send_json({
             'counts': counts,
@@ -217,6 +241,72 @@ class Handler(http.server.BaseHTTPRequestHandler):
             items = [it for it in items if it['type'] == item_type]
         items.sort(key=lambda x: x['mtime'], reverse=True)
         self._send_json(items)
+
+    def _handle_tags(self):
+        """扫描全部条目，统计每个标签的使用次数与关联文件路径。"""
+        tags = {}
+        for d in DIR_TYPE:
+            for f in list_md_files(d):
+                try:
+                    item = item_from_file(f)
+                except Exception:
+                    continue
+                for tg in (item.get('tags') or []):
+                    if not isinstance(tg, str) or not tg.strip():
+                        continue
+                    tg = tg.strip()
+                    if tg not in tags:
+                        tags[tg] = {'name': tg, 'count': 0, 'paths': []}
+                    tags[tg]['count'] += 1
+                    tags[tg]['paths'].append(item['path'])
+        result = sorted(tags.values(), key=lambda x: (-x['count'], x['name']))
+        self._send_json(result)
+
+    def _handle_tag_update(self):
+        """重命名 / 删除标签：跨所有文件更新 frontmatter 的 tags 列表。
+
+        body: {"from": "旧标签", "to": "新标签"}  —— to 为空则删除该标签。
+        """
+        data = self._read_body()
+        old = (data.get('from') or '').strip()
+        new = (data.get('to') or '').strip()
+        if not old:
+            self._send_json({'error': 'Missing from'}, 400)
+            return
+        if old == new:
+            self._send_json({'changed': 0})
+            return
+        changed = 0
+        for d in DIR_TYPE:
+            for f in list_md_files(d):
+                try:
+                    old_text = f.read_text(encoding='utf-8')
+                except Exception:
+                    continue
+                try:
+                    fm, content, _ = parse_frontmatter(old_text)
+                except Exception:
+                    continue
+                tags = fm.get('tags', [])
+                if not isinstance(tags, list):
+                    if isinstance(tags, str) and tags:
+                        tags = [t.strip() for t in re.split(r'[,，、]', tags) if t.strip()]
+                    else:
+                        tags = []
+                if old not in tags:
+                    continue
+                tags = [t for t in tags if t != old]
+                if new and new not in tags:
+                    tags.append(new)
+                fm['tags'] = tags
+                fm['updated'] = time.strftime('%Y-%m-%d %H:%M')
+                new_text = f'---\n{_build_frontmatter(fm)}\n---\n{content}'
+                try:
+                    f.write_text(new_text, encoding='utf-8')
+                except Exception:
+                    continue
+                changed += 1
+        self._send_json({'changed': changed})
 
     def _handle_get_item(self, params):
         file_path = params.get('path', [''])[0]
@@ -354,6 +444,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if self.path == '/api/item':
                 self._handle_update_item()
+                return
+            if self.path == '/api/tags':
+                self._handle_tag_update()
                 return
             self.send_error(404)
         except Exception as e:

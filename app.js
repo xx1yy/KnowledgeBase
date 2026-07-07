@@ -92,6 +92,10 @@ function renderNav(){
     <button class="nav-item ${currentView==='graph'?'active':''}" onclick="navigate('graph')">
       <span class="nav-i">🕸️</span><span>知识图谱</span>
     </button>
+    <button class="nav-item ${currentView==='tags'?'active':''}" onclick="navigate('tags')">
+      <span class="nav-i">🏷️</span><span>标签</span>
+      <span class="nav-n">${counts['tagCount']||0}</span>
+    </button>
     <div class="nav-label">内容</div>
     ${TYPES.map(t=>`<button class="nav-item ${currentView===t.key?'active':''}" onclick="navigate('${t.key}')">
       <span class="nav-i">${t.icon}</span><span>${t.label}</span>
@@ -123,6 +127,7 @@ async function navigate(view){
   if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); renderRightbar({actions:[
     {label:'＋ 新建笔记', onclick:'showAddVideoNoteModal()', type:'primary'}
   ]}); return }
+  if(view === 'tags'){ t.textContent = '标签'; a.style.display='none'; renderTags(); renderRightbar({actions:[]}); return }
   const ti = TYPE_MAP[view];
   if(ti){
     t.textContent = ti.label;

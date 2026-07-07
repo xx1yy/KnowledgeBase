@@ -76,6 +76,19 @@ button{cursor:pointer;border:none;background:none}
 .badge-red{background:var(--rsoft);color:var(--red)}
 .badge-blue{background:var(--asoft);color:var(--accent)}
 .tag{font-size:10.5px;color:var(--accent);background:var(--asoft);padding:2px 7px;border-radius:5px}
+
+/* 标签云 */
+.tag-cloud{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.tag-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;cursor:default;transition:all .12s;line-height:1}
+.tag-chip:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(99,102,241,.12)}
+.tag-chip-name{font-weight:600;color:var(--accent);cursor:pointer}
+.tag-chip-name:hover{text-decoration:underline}
+.tag-chip-count{font-size:11px;color:var(--faint);background:var(--asoft);border-radius:10px;padding:1px 7px;font-weight:600}
+.tag-chip-actions{display:none;gap:3px;align-items:center}
+.tag-chip:hover .tag-chip-actions{display:inline-flex}
+.tag-mini{width:20px;height:20px;border:none;border-radius:5px;background:var(--bg);color:var(--muted);cursor:pointer;font-size:12px;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:all .12s}
+.tag-mini:hover{background:var(--asoft);color:var(--accent)}
+.tag-mini.tag-del:hover{background:var(--rsoft);color:var(--red)}
 .preview-body{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
 
 .empty{text-align:center;padding:48px 20px;color:var(--faint)}
