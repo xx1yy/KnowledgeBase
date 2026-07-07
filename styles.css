@@ -77,6 +77,13 @@ button{cursor:pointer;border:none;background:none}
 .badge-blue{background:var(--asoft);color:var(--accent)}
 .tag{font-size:10.5px;color:var(--accent);background:var(--asoft);padding:2px 7px;border-radius:5px}
 
+/* Markdown 表格 */
+.md-table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;background:var(--surface);border-radius:var(--radius-sm);overflow:hidden}
+.md-table th,.md-table td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top;line-height:1.5}
+.md-table th{background:var(--asoft);font-weight:600;color:var(--text);white-space:nowrap}
+.md-table tr:nth-child(even) td{background:#fafbff}
+.md-table tr:hover td{background:var(--asoft)}
+
 /* 标签云 */
 .tag-cloud{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .tag-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;cursor:default;transition:all .12s;line-height:1}
