@@ -76,7 +76,7 @@ async function renderBookNotes(){
     </div>`;
 
   if(notes.length){
-    loadNoteContent(encodeURIComponent(notes[0].path));
+    loadNoteContent(encodeURIComponent(notes[0].path), {push:false});
   }
 }
 
@@ -129,11 +129,12 @@ async function renderVideoNotes(){
     </div>`;
 
   if(notes.length){
-    loadNoteContent(encodeURIComponent(notes[0].path));
+    loadNoteContent(encodeURIComponent(notes[0].path), {push:false});
   }
 }
 
-async function loadNoteContent(filepath){
+async function loadNoteContent(filepath, opts){
+  opts = opts || {};
   const fp = decodeURIComponent(filepath);
   currentNotePath = fp;
 
@@ -183,6 +184,7 @@ async function loadNoteContent(filepath){
     loadConceptsForNote(conceptNames);
   }
   refreshNoteRightbar(conceptNames, fp, isVideo, parentName, conceptCount, it);
+  if(opts.push !== false) pushHistory({type:'note', path: filepath});
 }
 
 async function loadConceptsForNote(conceptNames){
@@ -269,7 +271,7 @@ async function saveNoteContent(){
       const nt = ni.querySelector('.nt');
       if(nt) nt.textContent = (title || '').replace(/-文学笔记$/,'').replace(/-视频笔记$/,'');
     }
-    await loadNoteContent(encodeURIComponent(currentNotePath));
+    await loadNoteContent(encodeURIComponent(currentNotePath), {push:false});
     await loadDashboard();
     renderNav();
   }catch(e){
@@ -277,10 +279,15 @@ async function saveNoteContent(){
   }
 }
 
-function showExtractConcept(){
-  if(!currentNoteData){ alert('请先选择一篇笔记'); return; }
+async function showExtractConcept(filepath, opts){
+  opts = opts || {};
+  let fp = filepath || currentNotePath;
+  if(!fp){ alert('请先选择一篇笔记'); return; }
+  if(!currentNoteData || currentNotePath !== fp){
+    try{ currentNoteData = await get('/item?path=' + encodeURIComponent(fp)); currentNotePath = fp; }
+    catch(e){ alert('加载笔记失败'); return; }
+  }
   const it = currentNoteData;
-  const fp = currentNotePath;
   const parentName = fp ? fp.split('/').slice(-2,-1)[0] || '' : '';
   const noteType = it.type || 'book-notes';
   const isVideo = noteType === 'video-notes';
@@ -289,7 +296,7 @@ function showExtractConcept(){
   // 更新右侧栏
   renderRightbar({
     actions: [
-      {label:'← 返回笔记', onclick:`loadNoteContent('${encodeURIComponent(fp)}')`},
+      {label:'← 返回笔记', onclick:'history.back()'},
       {label:'💡 创建概念', onclick:`saveExtractedConcept('${ESC(parentName)}','${encodeURIComponent(fp)}')`, type:'primary'}
     ],
     info: `来源：${parentName}<br>步骤：①摘录 → ②命名 → ③定义 → ④解释 → ⑤用法`
@@ -334,6 +341,7 @@ function showExtractConcept(){
         <input class="extract-input" id="xc_tags" type="text" placeholder="逗号分隔，例：心理学, 认知">
       </div>
     </div>`;
+  if(opts.push !== false) pushHistory({type:'extract', path: fp});
 }
 
 async function saveExtractedConcept(bookName, notePath){
@@ -380,7 +388,7 @@ async function saveExtractedConcept(bookName, notePath){
     } else {
       await renderBookNotes();
     }
-    if(notePath) loadNoteContent(notePath);
+    if(notePath) loadNoteContent(notePath, {push:false});
   }catch(e){
     alert('创建失败：' + e.message);
   }

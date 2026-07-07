@@ -16,6 +16,31 @@ async function loadRecentConcepts(){
 
 function clearRecentConceptsCache(){ _recentConcepts = null; }
 
+// ── 浏览器历史栈（支持后退/前进按钮）──
+function pushHistory(state){ history.pushState(state, ''); }
+async function restoreNotesView(path, done){
+  const fp = decodeURIComponent(path);
+  let view = 'book-notes';
+  try{
+    const it = await get('/item?path=' + encodeURIComponent(fp));
+    view = it.type === 'video-notes' ? 'video-notes' : 'book-notes';
+  }catch(e){}
+  if(!document.getElementById('noteReader')){
+    currentNotesView = view;
+    if(view === 'video-notes'){ await renderVideoNotes(); } else { await renderBookNotes(); }
+  }
+  if(done) await done();
+}
+function applyRoute(state){
+  if(!state){ navigate('dashboard', {push:false}); return; }
+  if(state.type === 'view'){ navigate(state.view, {push:false}); return; }
+  if(state.type === 'detail'){ openDetail(state.path, {push:false}); return; }
+  if(state.type === 'note'){ restoreNotesView(state.path, () => loadNoteContent(state.path, {push:false})); return; }
+  if(state.type === 'extract'){ restoreNotesView(state.path, async () => { await loadNoteContent(state.path, {push:false}); showExtractConcept(state.path, {push:false}); }); return; }
+  navigate('dashboard', {push:false});
+}
+window.addEventListener('popstate', (e)=> applyRoute(e.state));
+
 // 渲染右侧快捷面板
 function renderRightbar(ctx){
   const el = document.getElementById('rightbar');
@@ -112,39 +137,43 @@ function renderNav(){
   `;
 }
 
-async function navigate(view){
+async function navigate(view, opts){
+  opts = opts || {};
   currentView = view;
   renderNav();
   const t = document.getElementById('pageTitle');
   const a = document.getElementById('addBtn');
   await loadRecentConcepts(); // 确保右侧栏有数据
-  if(view === 'dashboard'){ t.textContent = '仪表盘'; a.style.display='none'; renderDashboard(); renderRightbar({actions:[]}); return }
-  if(view === 'search'){ t.textContent = '搜索'; a.style.display='none'; renderSearch(); renderRightbar({actions:[]}); return }
-  if(view === 'graph'){ t.textContent = '知识图谱'; a.style.display='none'; renderGraph(); renderRightbar({actions:[]}); return }
-  if(view === 'book-notes'){ currentNotesView = 'book-notes'; t.textContent = '文学笔记'; a.style.display='none'; renderBookNotes(); renderRightbar({actions:[
+  if(view === 'dashboard'){ t.textContent = '仪表盘'; a.style.display='none'; renderDashboard(); renderRightbar({actions:[]}); }
+  else if(view === 'search'){ t.textContent = '搜索'; a.style.display='none'; renderSearch(); renderRightbar({actions:[]}); }
+  else if(view === 'graph'){ t.textContent = '知识图谱'; a.style.display='none'; renderGraph(); renderRightbar({actions:[]}); }
+  else if(view === 'book-notes'){ currentNotesView = 'book-notes'; t.textContent = '文学笔记'; a.style.display='none'; renderBookNotes(); renderRightbar({actions:[
     {label:'＋ 新建笔记', onclick:'showAddNoteModal()', type:'primary'}
-  ]}); return }
-  if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); renderRightbar({actions:[
+  ]}); }
+  else if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); renderRightbar({actions:[
     {label:'＋ 新建笔记', onclick:'showAddVideoNoteModal()', type:'primary'}
-  ]}); return }
-  if(view === 'tags'){ t.textContent = '标签'; a.style.display='none'; renderTags(); renderRightbar({actions:[]}); return }
-  const ti = TYPE_MAP[view];
-  if(ti){
-    t.textContent = ti.label;
-    a.style.display='inline-flex';
-    renderList(view);
-    renderRightbar({actions:[
-      {label:'＋ 新建', onclick:`openQuickCapture('${view}')`, type:'primary'}
-    ]});
-    return
+  ]}); }
+  else if(view === 'tags'){ t.textContent = '标签'; a.style.display='none'; renderTags(); renderRightbar({actions:[]}); }
+  else {
+    const ti = TYPE_MAP[view];
+    if(ti){
+      t.textContent = ti.label;
+      a.style.display='inline-flex';
+      renderList(view);
+      renderRightbar({actions:[
+        {label:'＋ 新建', onclick:`openQuickCapture('${view}')`, type:'primary'}
+      ]});
+    }
   }
+  if(opts.push !== false) pushHistory({type:'view', view});
 }
 
-async function openDetail(filepath){
+async function openDetail(filepath, opts){
+  opts = opts || {};
   const it = await get(`/item?path=${encodeURIComponent(decodeURIComponent(filepath))}`);
   if(it.error) return alert('文件未找到');
   const t = TYPE_MAP[it.type];
-  let html = `<div class="detail"><span class="detail-back" onclick="navigate('${it.type}')">← 返回${t?.label||''}</span>`;
+  let html = `<div class="detail"><span class="detail-back" onclick="history.back()">← 返回${t?.label||''}</span>`;
   html += `<div class="detail-card">`;
   html += `<div class="detail-title">${ESC(it.title)}</div>`;
   html += `<div class="detail-meta">`;
@@ -202,6 +231,7 @@ async function openDetail(filepath){
     ],
     info: infoLines.join('<br>') || null
   });
+  if(opts.push !== false) pushHistory({type:'detail', path: filepath});
 }
 
 async function deleteItem(filepath){
@@ -209,7 +239,7 @@ async function deleteItem(filepath){
   if(!confirm('确定删除此条目？将移到回收站。')) return;
   await del(`/item?path=${encodeURIComponent(fp)}`);
   await loadDashboard();
-  navigate(currentView);
+  navigate(currentView, {push:false});
 }
 
 async function openEdit(filepath){
@@ -242,7 +272,7 @@ async function saveEdit(filepath){
   await loadDashboard();
   clearRecentConceptsCache();
   await loadRecentConcepts();
-  openDetail(filepath);
+  openDetail(filepath, {push:false});
 }
 
 function openQuickCapture(preselectType){
@@ -294,7 +324,7 @@ async function saveQuickCapture(){
   const r = await post('/item', data);
   closeModal();
   await loadDashboard();
-  navigate(t);
+  navigate(t, {push:false});
 }
 
 function closeModal(){ document.getElementById('modalMask').classList.remove('show') }
@@ -497,6 +527,7 @@ document.getElementById('searchBox').addEventListener('input', function(){
     await loadRecentConcepts();
     renderNav();
     renderDashboard();
+    history.replaceState({type:'view', view:'dashboard'}, '');
     renderRightbar({actions:[]});
   }catch(e){
     document.getElementById('content').innerHTML =
