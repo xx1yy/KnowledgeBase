@@ -6,7 +6,7 @@ import os
 import re
 from pathlib import Path
 
-from config import VAULT_ROOT, DIR_TYPE
+from backend.config import VAULT_ROOT, DIR_TYPE
 
 
 # ── 排除的索引文件（不显示在条目列表中） ──

@@ -10,12 +10,12 @@
 import os
 from pathlib import Path
 
-import config
-from handler import KBServer, Handler
+from backend import config
+from backend.handler import KBServer, Handler
 
 
 def main():
-    os.chdir(str(Path(__file__).parent))
+    os.chdir(str(Path(__file__).parent.parent))
     config.log("个人知识库服务启动")
     config.log(f"  Vault: {config.VAULT_ROOT}")
 

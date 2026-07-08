@@ -11,12 +11,12 @@ import shutil
 import re
 from pathlib import Path
 
-from config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log
-from vault import (
+from backend.config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log
+from backend.vault import (
     parse_frontmatter, extract_wikilinks, list_md_files,
     item_from_file, search_items, get_graph_data, sanitize_filename,
 )
-from templates import generate_md, _build_frontmatter
+from backend.templates import generate_md, _build_frontmatter
 
 
 class KBServer(http.server.HTTPServer):
@@ -116,7 +116,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _serve_static(self, path):
         """尝试从项目根目录提供静态文件。"""
-        root = Path(__file__).parent
+        root = Path(__file__).parent.parent / "frontend"
         # 防止目录遍历攻击
         clean_path = path.lstrip('/')
         if '..' in clean_path or '~' in clean_path:

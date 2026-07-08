@@ -13,7 +13,7 @@ if exist server_port.txt del /f /q server_port.txt > nul 2>&1
 
 REM Start server in a new window
 set PY=C:\Users\20132\.workbuddy\binaries\python\versions\3.13.12\python.exe
-start "KB-Server" "%PY%" server.py
+start "KB-Server" "%PY%" -m backend.server
 
 REM Wait for server_port.txt to appear
 set PORT=

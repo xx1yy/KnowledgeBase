@@ -23,7 +23,7 @@ if (Test-Path $PortFile) { Remove-Item $PortFile -Force }
 
 # 3. Start server
 Write-Host "[2/4] Starting backend server..." -ForegroundColor Green
-$ServerProc = Start-Process -FilePath $PythonExe -ArgumentList "server.py" -PassThru -WindowStyle Normal
+$ServerProc = Start-Process -FilePath $PythonExe -ArgumentList "-m","backend.server" -PassThru -WindowStyle Normal
 
 # 4. Wait for server_port.txt
 Write-Host "[3/4] Waiting for server to start..." -ForegroundColor Green

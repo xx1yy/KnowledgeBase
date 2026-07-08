@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 
 PORT = 16000
-VAULT_ROOT = Path(__file__).parent / "个人知识库"
-FRONTEND_FILE = Path(__file__).parent / "dashboard.html"
+VAULT_ROOT = Path(__file__).parent.parent / "个人知识库"
+FRONTEND_FILE = Path(__file__).parent.parent / "frontend" / "dashboard.html"
 
 # 目录名 → 类型映射
 DIR_TYPE = {
