@@ -49,11 +49,29 @@ function renderNoteContent(text){
   if(!text || !text.trim()) return '<p style="color:var(--faint)">暂无内容，点击「编辑」开始记录</p>';
   const lines = text.split('\n');
   let html = '';
-  let inList = false, inQuote = false, tableBuf = [];
+  let inList = false, tableBuf = [];
+  const quoteBuf = [];
   const callout = {active:false, type:'note', fold:'', title:'', buf:[]};
+  function flushQuote(){
+    if(!quoteBuf.length) return;
+    const paras = [];
+    let cur = [];
+    for(const raw of quoteBuf){
+      const line = raw.replace(/^>\s?/, '');
+      if(line === ''){
+        if(cur.length){ paras.push(cur); cur = []; }
+      } else {
+        cur.push(line);
+      }
+    }
+    if(cur.length) paras.push(cur);
+    const body = paras.map(p => '<p>' + p.map(l => renderInline(l)).join('<br>') + '</p>').join('');
+    html += '<blockquote>' + body + '</blockquote>';
+    quoteBuf.length = 0;
+  }
   function closeBlocks(){
     if(inList){ html += '</ul>'; inList = false; }
-    if(inQuote){ html += '</blockquote>'; inQuote = false; }
+    flushQuote();
   }
   function flushTable(){
     if(tableBuf.length >= 2 && mdIsSeparator(tableBuf[1])){
@@ -81,7 +99,7 @@ function renderNoteContent(text){
     // 表格行：含 | 则累积，遇非表格行再 flush
     if(t.includes('|')){
       if(inList){ html += '</ul>'; inList = false; }
-      if(inQuote){ html += '</blockquote>'; inQuote = false; }
+      flushQuote();
       tableBuf.push(line);
       continue;
     }
@@ -91,7 +109,7 @@ function renderNoteContent(text){
     const cm = t.match(/^>\s*\[!(\w+)\]([-+]?)\s*(.*)$/);
     if(cm){
       if(inList){ html += '</ul>'; inList = false; }
-      if(inQuote){ html += '</blockquote>'; inQuote = false; }
+      flushQuote();
       flushCallout();
       callout.active = true;
       callout.type = cm[1].toLowerCase();
@@ -109,18 +127,20 @@ function renderNoteContent(text){
       // 非 > 行：结束标注框，按普通行继续处理
     }
 
+    // 普通引用块：连续 > 行收集为一个 blockquote，空 > 行作为段内换行
+    if(/^>/.test(t)){
+      quoteBuf.push(t);
+      continue;
+    }
+    flushQuote();
     if(/^# [^#]/.test(t)){
       closeBlocks(); html += `<h1>${renderInline(t.slice(2))}</h1>`;
     } else if(/^## /.test(t)){
       closeBlocks(); html += `<h2>${renderInline(t.slice(3))}</h2>`;
     } else if(/^---+$/.test(t)){
       closeBlocks(); html += '<hr>';
-    } else if(/^> /.test(t)){
-      if(inList){ html += '</ul>'; inList = false; }
-      if(!inQuote){ html += '<blockquote>'; inQuote = true; }
-      html += '<p>' + renderInline(t.slice(2)) + '</p>';
     } else if(/^[-*] /.test(t)){
-      if(inQuote){ html += '</blockquote>'; inQuote = false; }
+      flushQuote();
       if(!inList){ html += '<ul>'; inList = true; }
       html += `<li>${renderInline(t.slice(2))}</li>`;
     } else if(t === ''){
@@ -131,8 +151,8 @@ function renderNoteContent(text){
   }
   if(tableBuf.length) flushTable();
   flushCallout();
+  flushQuote();
   if(inList) html += '</ul>';
-  if(inQuote) html += '</blockquote>';
   return html;
 }
 
