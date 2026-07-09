@@ -169,8 +169,18 @@ function showAddNoteModal(noteType){
   window._currentNoteModalType = noteType;
 
   if(parents.length){
-    document.getElementById(cfg.selectId).selectedIndex = 1;
-    onNoteParentChange(null, document.getElementById(cfg.selectId));
+    const sel = document.getElementById(cfg.selectId);
+    // 默认选中上次创建笔记所属的父级（书籍/视频）；无记录则选第一个
+    let idx = 1; // 第 0 项是「＋ 输入新…」
+    try{
+      const lastParent = localStorage.getItem('kb_lastNoteParent_' + noteType);
+      if(lastParent){
+        const found = parents.findIndex(p => p.title === lastParent);
+        if(found >= 0) idx = found + 1;
+      }
+    }catch(e){}
+    sel.selectedIndex = idx;
+    onNoteParentChange(null, sel);
   }
   if(cfg.listId) updateChapterSuggestions();
 }
@@ -257,11 +267,25 @@ async function saveNewNote(noteType){
   try{
     const postData = {type: noteType + '-notes', title:title, parent:parent, content:content};
     if(chapter) postData.chapter = chapter;
-    await post('/item', postData);
+    // 记录上次创建笔记所属的父级（书籍/视频），供下次打开弹窗默认选中
+    try{ localStorage.setItem('kb_lastNoteParent_' + noteType, parent); }catch(e){}
+    const newItem = await post('/item', postData);
     closeModal();
     await loadDashboard();
-    if(noteType === 'video'){ await renderVideoNotes(); }
-    else { await renderBookNotes(); }
+    // 重新渲染列表（拿到最新数据），随后直接打开刚创建的笔记，而不是跳到第一本第一个
+    if(noteType === 'video'){
+      await renderVideoNotes();
+    } else {
+      await renderBookNotes();
+    }
+    if(newItem && newItem.path){
+      const folder = newItem.path.split('/').slice(-2, -1)[0];
+      // 文学笔记：高亮新笔记所属的书籍并刷新对应章节栏，保持侧栏与正文一致
+      if(noteType === 'book' && folder && window._bookNotesByFolder && window._bookNotesByFolder[folder]){
+        selectBook(folder, {loadFirst:false});
+      }
+      loadNoteContent(encodeURIComponent(newItem.path), {push:true});
+    }
   }catch(e){
     alert('创建失败：' + e.message);
   }

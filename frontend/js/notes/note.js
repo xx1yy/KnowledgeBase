@@ -391,6 +391,8 @@ async function saveNoteContent(){
     await loadNoteContent(encodeURIComponent(currentNotePath), {push:false});
     await loadDashboard();
     renderNav();
+    // 刷新章节栏，让新的 chapter 分组立即生效
+    if(currentBookFilter) renderChapterBar(currentBookFilter);
   }catch(e){
     alert('保存失败：' + e.message);
   }

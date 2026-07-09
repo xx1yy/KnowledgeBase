@@ -57,9 +57,20 @@ async function showConceptPage(filepath, opts){
   if(opts.push !== false) pushHistory({type:'concept', conceptPath: filepath, notePath: currentNotePath});
 }
 
+// 从 concept 的 content 字段中剔除 "## 怎么用"/"## 原文摘录" 等后续段落
+// 防止 renderNoteContent 渲染出完整正文（与独立的 how_to_use/excerpt 字段重复显示）
+function cleanConceptContent(raw){
+  if(!raw) return raw;
+  // 截断到第一个 ## 怎么用 或 ## 原文摘录 之前
+  const idx = raw.search(/\n##\s*(?:怎么用|原文摘录)\b/m);
+  return idx > 0 ? raw.substring(0, idx).trim() : raw;
+}
+
 function conceptViewHtml(it, fp){
   const def = it.definition ? `<div class="extract-step">一句话定义</div><div class="extract-read">${ESC(it.definition)}</div>` : '';
-  const content = it.content ? `<div class="extract-step">核心解释</div><div class="extract-read">${renderNoteContent(it.content)}</div>` : '';
+  // content 只取核心解释段，截断后续段落避免与 how_to_use/excerpt 重复
+  const safeContent = cleanConceptContent(it.content);
+  const content = safeContent ? `<div class="extract-step">核心解释</div><div class="extract-read">${renderNoteContent(safeContent)}</div>` : '';
   const how = it.how_to_use ? `<div class="extract-step">怎么用</div><div class="extract-read">${ESC(it.how_to_use)}</div>` : '';
   const excerpt = it.excerpt ? `<div class="extract-step">原文摘录</div><blockquote class="md-quote">${ESC(it.excerpt)}</blockquote>` : '';
   const tags = (it.tags&&it.tags.length) ? `<div class="extract-step">标签</div><div>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>` : '';

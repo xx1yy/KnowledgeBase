@@ -121,10 +121,12 @@ async function openDetail(filepath, opts){
   if(it.source) html += `<div class="detail-section"><h4>来源</h4><p>${ESC(it.source)}</p></div>`;
   if(it.url) html += `<div class="detail-section"><h4>链接</h4><p><a href="${ESC(it.url)}" target="_blank">${ESC(it.url)}</a></p></div>`;
   if(it.domain) html += `<div class="detail-section"><h4>领域</h4><p>${ESC(it.domain)}</p></div>`;
-  if(it.content) html += `<div class="detail-section"><h4>内容</h4>${renderNoteContent(it.content)}</div>`;
-  if(it.tags&&it.tags.length) html += `<div class="detail-section"><h4>标签</h4>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>`;
   if(it.type==='concept'){
-    html += `<div class="detail-section"><h4>📖 来源笔记</h4><div class="detail-links" id="conceptSources">加载中…</div></div>`;
+    // 概念类型：conceptViewHtml 已包含四字段 + 「被以下笔记引用」
+    html += `<div class="detail-section">${conceptViewHtml(it, filepath)}</div>`;
+  } else {
+    if(it.content) html += `<div class="detail-section"><h4>内容</h4>${renderNoteContent(it.content)}</div>`;
+    if(it.tags&&it.tags.length) html += `<div class="detail-section"><h4>标签</h4>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>`;
   }
   if(it.type==='book'){
     const allBooks = await get(`/items?type=book`);
@@ -321,11 +323,20 @@ function initEventDelegation(){
     for(const a of actions){
       const fnName = a.trim();
       if(!fnName) continue;
-      if(typeof window[fnName] === 'function'){
-        // 每个子动作取对应的参数；若只有一组 args 则所有子动作共用
+      // 支持 "history.back" 这种多级属性路径（window.history.back）
+      let fn;
+      if(fnName.includes('.')){
+        const parts = fnName.split('.');
+        let obj = window;
+        for(const p of parts){ if(obj) obj = obj[p]; }
+        fn = typeof obj === 'function' ? obj : null;
+      } else {
+        fn = typeof window[fnName] === 'function' ? window[fnName] : null;
+      }
+      if(fn){
         const argIdx = actions.indexOf(a);
         const subArgs = (argIdx >= 0 && Array.isArray(args[argIdx])) ? args[argIdx] : args;
-        window[fnName](...subArgs);
+        fn(...subArgs);
       }
     }
     // 如果元素有 href="#" 且不是真正的链接，阻止默认行为

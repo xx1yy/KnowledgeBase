@@ -70,8 +70,6 @@ created: "{now}"
 updated: "{now}"
 ---
 
-# {title}
-
 > 原始摘录、逐章内容、金句、随手笔记。
 > 枢纽页在 [[{data.get('parent', title)}]]
 
@@ -134,8 +132,6 @@ parent: "[[{data.get('parent', title)}]]"
 created: "{now}"
 updated: "{now}"
 ---
-
-# {title}
 
 > 原始摘录、逐段内容、金句、随手笔记。
 > 枢纽页在 [[{data.get('parent', title)}]]
