@@ -140,6 +140,7 @@ def item_from_file(filepath):
         'progress': fm.get('progress', 0),
         'domain': fm.get('domain', ''),
         'chapter': fm.get('chapter', ''),
+        'order': fm.get('order', None),
         'tags': tags,
         'concepts': concepts,
         'mood': fm.get('mood', ''),

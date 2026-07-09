@@ -97,6 +97,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._handle_tags()
                 return
 
+            # API: 领域统计
+            if path == '/api/domains':
+                self._handle_domains()
+                return
+
             # API: 获取单个文件
             if path == '/api/item':
                 self._handle_get_item(params)
@@ -222,6 +227,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except Exception:
                     pass
         counts['tagCount'] = len(all_tags)
+        # 统计领域总数
+        all_domains = set()
+        for d in DIR_TYPE:
+            for f in list_md_files(d):
+                try:
+                    fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
+                    dom = fm.get('domain', '')
+                    if isinstance(dom, str) and dom:
+                        for dn in re.split(r'[,，、]', dom):
+                            dn = dn.strip()
+                            if dn:
+                                all_domains.add(dn)
+                except Exception:
+                    pass
+        counts['domainCount'] = len(all_domains)
         recent_all.sort(key=lambda x: x['mtime'], reverse=True)
         self._send_json({
             'counts': counts,
@@ -260,6 +280,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     tags[tg]['count'] += 1
                     tags[tg]['paths'].append(item['path'])
         result = sorted(tags.values(), key=lambda x: (-x['count'], x['name']))
+        self._send_json(result)
+
+    def _handle_domains(self):
+        """扫描全部条目，统计每个领域的使用次数、关联路径与类型分布。
+
+        domain 字段为自由文本，支持以逗号/、分隔的多个领域（如 "行为经济学, 自控方法"）。
+        """
+        domains = {}
+        for d in DIR_TYPE:
+            for f in list_md_files(d):
+                try:
+                    item = item_from_file(f)
+                except Exception:
+                    continue
+                dom = item.get('domain')
+                if not dom or not isinstance(dom, str):
+                    continue
+                for dn in re.split(r'[,，、]', dom):
+                    dn = dn.strip()
+                    if not dn:
+                        continue
+                    if dn not in domains:
+                        domains[dn] = {'name': dn, 'count': 0, 'paths': [], 'types': {}}
+                    domains[dn]['count'] += 1
+                    domains[dn]['paths'].append(item['path'])
+                    t = item.get('type', 'unknown')
+                    domains[dn]['types'][t] = domains[dn]['types'].get(t, 0) + 1
+        result = sorted(domains.values(), key=lambda x: (-x['count'], x['name']))
         self._send_json(result)
 
     def _handle_tag_update(self):
@@ -471,7 +519,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         updatable = ['status', 'priority', 'rating', 'progress',
                      'mood', 'finish_date', 'watch_date', 'due_date',
                      'tags', 'title', 'author', 'source', 'url', 'domain',
-                     'concepts', 'chapter']
+                     'concepts', 'chapter', 'order']
         for key in updatable:
             if key in data:
                 fm[key] = data[key]

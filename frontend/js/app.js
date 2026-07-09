@@ -121,6 +121,10 @@ function renderNav(){
       <span class="nav-i">🏷️</span><span>标签</span>
       <span class="nav-n">${counts['tagCount']||0}</span>
     </button>
+    <button class="nav-item ${currentView==='domains'?'active':''}" onclick="navigate('domains')">
+      <span class="nav-i">🗂️</span><span>领域</span>
+      <span class="nav-n">${counts['domainCount']||0}</span>
+    </button>
     <div class="nav-label">内容</div>
     ${TYPES.map(t=>`<button class="nav-item ${currentView===t.key?'active':''}" onclick="navigate('${t.key}')">
       <span class="nav-i">${t.icon}</span><span>${t.label}</span>
@@ -154,6 +158,7 @@ async function navigate(view, opts){
     {label:'＋ 新建笔记', onclick:'showAddVideoNoteModal()', type:'primary'}
   ]}); }
   else if(view === 'tags'){ t.textContent = '标签'; a.style.display='none'; renderTags(); renderRightbar({actions:[]}); }
+  else if(view === 'domains'){ t.textContent = '领域'; a.style.display='none'; renderDomains(); renderRightbar({actions:[]}); }
   else {
     const ti = TYPE_MAP[view];
     if(ti){
@@ -251,6 +256,7 @@ async function openEdit(filepath){
     ${it.type==='book'||it.type==='video'?`<div class="field"><label>评分</label><select id="f_rating">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${n===it.rating?'selected':''}>${'★'.repeat(n)}${'☆'.repeat(5-n)}</option>`).join('')}</select></div>`:''}
     ${it.type==='problem'||it.type==='plan'?`<div class="field"><label>优先级</label><select id="f_priority">${['高','中','低'].map(p=>`<option ${p===it.priority?'selected':''}>${p}</option>`).join('')}</select></div>`:''}
     ${it.type==='reflection'?`<div class="field"><label>心情</label><select id="f_mood">${['😊 开心','😌 平静','😐 一般','😔 低落','😣 痛苦'].map(m=>`<option ${m===it.mood?'selected':''}>${m}</option>`).join('')}</select></div>`:''}
+    ${it.type==='concept'||it.type==='problem'?`<div class="field"><label>领域</label><input type="text" id="f_domain" value="${ESC(it.domain||'')}" placeholder="如：学习方法，认知心理学（多个用逗号分隔）"></div>`:''}
     <div class="field"><label>内容</label><textarea id="f_content" style="min-height:200px">${ESC(it.content||'')}</textarea></div>
   </div>
   <div class="modal-foot"><button class="btn-g" onclick="closeModal()">取消</button><button class="btn-p" onclick="saveEdit('${filepath}')">保存</button></div>`;
@@ -267,6 +273,8 @@ async function saveEdit(filepath){
   });
   const contentEl = document.getElementById('f_content');
   if(contentEl) data.content = contentEl.value;
+  const domainEl = document.getElementById('f_domain');
+  if(domainEl) data.domain = domainEl.value.trim();
   await put('/item', {path: fp, ...data});
   closeModal();
   await loadDashboard();

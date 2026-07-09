@@ -199,6 +199,21 @@ body.sidebar-collapsed .nav-item{padding:9px 0;justify-content:center;gap:0}
 .chapter-h2 .ch-count{margin-left:auto;font-size:10px;color:var(--faint);background:var(--asoft);padding:1px 7px;border-radius:8px;font-weight:600}
 .chapter-empty{font-size:12.5px;color:var(--faint);padding:20px 8px;text-align:center}
 
+/* 排序工具栏 */
+.sort-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:2px 0 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.sort-bar select{flex:1;min-width:0;padding:5px 6px;font-size:11.5px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);outline:none}
+.sort-bar select:disabled{opacity:.55}
+.sort-bar .btn-p.sm,.sort-bar .btn-g.sm{padding:5px 9px;font-size:11.5px;white-space:nowrap}
+.sort-bar .sort-hint{font-size:10.5px;color:var(--accent);font-weight:600;white-space:nowrap}
+.sort-bar.manual{background:var(--asoft);border-color:hsl(var(--co-blue),.4)}
+
+/* 手动拖拽排序 */
+.note-item.draggable{cursor:grab}
+.note-item.dragging{opacity:.4}
+.note-item.drop-before{border-top:2px solid var(--accent)}
+.note-item.drop-after{border-bottom:2px solid var(--accent)}
+
+
 /* 笔记内栏折叠（书籍栏 / 章节栏） */
 .nb-head{display:flex;justify-content:flex-end;margin-bottom:6px}
 .nb-toggle,.ch-toggle{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;background:transparent;transition:transform .15s}
@@ -217,7 +232,8 @@ body.sidebar-collapsed .nav-item{padding:9px 0;justify-content:center;gap:0}
 .notes-layout.chapters-collapsed .chapter-bar-sub,
 .notes-layout.chapters-collapsed .chapter-h2 .ch-name,
 .notes-layout.chapters-collapsed .chapter-h2 .ch-count,
-.notes-layout.chapters-collapsed .note-item{display:none}
+.notes-layout.chapters-collapsed .note-item,
+.notes-layout.chapters-collapsed .sort-bar{display:none}
 .notes-layout.chapters-collapsed .chapter-h2{justify-content:center;padding:8px 0;cursor:pointer}
 .notes-layout.chapters-collapsed .chapter-h2 .ch-dot{font-size:16px}
 .notes-layout.chapters-collapsed .chapter-group{margin:0}
