@@ -16,8 +16,9 @@ from backend.config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log
 from backend.vault import (
     parse_frontmatter, extract_wikilinks, list_md_files,
     item_from_file, search_items, get_graph_data, sanitize_filename,
+    _parse_concept_sections,
 )
-from backend.templates import generate_md, _build_frontmatter
+from backend.templates import generate_md, _build_frontmatter, concept_display_body
 
 
 class KBServer(http.server.HTTPServer):
@@ -608,7 +609,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
         updatable = ['status', 'priority', 'rating', 'progress',
                      'mood', 'finish_date', 'watch_date', 'due_date',
                      'tags', 'title', 'author', 'source', 'url', 'domain',
-                     'concepts', 'chapter', 'order']
+                     'concepts', 'chapter', 'order', 'definition', 'how_to_use', 'excerpt']
+
+        # 概念：结构化字段以正文为唯一来源，重写正文而不是塞进 frontmatter
+        if fm.get('type') == 'concept':
+            for key in updatable:
+                if key in data:
+                    fm[key] = data[key]
+            bd, be, bc, bh = _parse_concept_sections(content)
+            c_def = data.get('definition', bd)
+            c_exc = data.get('excerpt', be)
+            c_con = data.get('content', bc)
+            c_how = data.get('how_to_use', bh)
+            c_src = fm.get('source', '')
+            # 剔除正文专属键，避免多行内容写入 frontmatter 破坏 YAML
+            for k in ('content', 'definition', 'excerpt', 'how_to_use'):
+                fm.pop(k, None)
+            fm['updated'] = time.strftime('%Y-%m-%d %H:%M')
+            new_body = concept_display_body(fm.get('title', ''), c_def, c_src, c_exc, c_con, c_how)
+            new_fm = _build_frontmatter(fm)
+            new_text = f'---\n{new_fm}\n---\n{new_body}'
+            fp.write_text(new_text, encoding='utf-8')
+            item = item_from_file(fp)
+            self._send_json(item)
+            return
+
         for key in updatable:
             if key in data:
                 fm[key] = data[key]

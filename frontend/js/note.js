@@ -400,7 +400,7 @@ async function loadConceptsForNote(conceptNames){
             const count = (c.excerpt ? 1 : 0) + (c.definition ? 1 : 0) + (c.how_to_use ? 1 : 0);
             const fill = count >= 3 ? 'var(--accent)' : count >= 1 ? 'var(--orange)' : 'var(--faint)';
             const tip = count >= 3 ? '完整' : count >= 1 ? '部分' : '仅名称';
-            return `<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(c.path)}')"
+            return `<a href="#" onclick="event.preventDefault();showConceptPage('${encodeURIComponent(c.path)}')"
               style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--asoft);color:var(--accent);border-radius:var(--radius-sm);font-size:12.5px;font-weight:500;text-decoration:none;transition:all .12s"
               onmouseover="this.style.background='var(--accent)';this.style.color='#fff'"
               onmouseout="this.style.background='var(--asoft)';this.style.color='var(--accent)'"
@@ -438,6 +438,7 @@ async function refreshNoteRightbar(conceptNames, fp, isVideo, parentName, concep
   }
 
   renderRightbar({actions, concepts: conceptItems, info});
+  window.noteRightbarCtx = {actions, concepts: conceptItems, info};
 }
 
 function toggleNoteEdit(){
@@ -502,18 +503,19 @@ async function showExtractConcept(filepath, opts){
       <span class="type-badge ${isVideo ? 'type-video' : 'type-book'}">${icon} ${ESC(parentName)}</span>
       <span style="font-size:13px;font-weight:600;color:var(--muted)">💡 从笔记提取概念</span>
     </div>
-    <div class="extract-split">
+    <div class="extract-split" id="extractSplit">
       <div class="extract-split-left">
         <h1>${ESC(it.title)}</h1>
         ${renderNoteContent(it.content)}
       </div>
+      <div class="extract-resizer" id="splitResizer"></div>
       <div class="extract-split-right">
         <div style="margin-bottom:14px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted)">
           📚 来源：<strong style="color:var(--accent)">${ESC(parentName)}</strong>
         </div>
 
         <div class="extract-step">① 原文摘录</div>
-        <textarea class="extract-area" id="xc_excerpt" style="min-height:70px;margin-bottom:3px" placeholder="← 从左侧笔记中选中文字复制过来"></textarea>
+        <textarea class="extract-area" id="xc_excerpt" style="min-height:100px;margin-bottom:3px" placeholder="← 从左侧笔记中选中文字复制过来"></textarea>
         <div class="extract-hint" style="margin-bottom:12px">从左边笔记复制一段有价值的段落</div>
 
         <div class="extract-step">② 概念名称</div>
@@ -525,17 +527,18 @@ async function showExtractConcept(filepath, opts){
         <div class="extract-hint" style="margin-bottom:12px">不超过20字，像字典词条</div>
 
         <div class="extract-step">④ 核心解释</div>
-        <textarea class="extract-area" id="xc_content" style="min-height:80px;margin-bottom:3px" placeholder="用自己的话展开说明"></textarea>
+        <textarea class="extract-area" id="xc_content" style="min-height:140px;margin-bottom:3px" placeholder="用自己的话展开说明"></textarea>
         <div class="extract-hint" style="margin-bottom:12px">基于摘录改写，不要直接复制</div>
 
         <div class="extract-step">⑤ 怎么用 <span style="color:var(--faint);font-weight:400">（可选）</span></div>
-        <textarea class="extract-area" id="xc_howto" style="min-height:50px;margin-bottom:3px" placeholder="什么场景下能帮到你？"></textarea>
+        <textarea class="extract-area" id="xc_howto" style="min-height:80px;margin-bottom:3px" placeholder="什么场景下能帮到你？"></textarea>
         <div class="extract-hint" style="margin-bottom:12px">想象一个具体场景</div>
 
         <div class="extract-step">标签 <span style="color:var(--faint);font-weight:400">（可选）</span></div>
         <input class="extract-input" id="xc_tags" type="text" placeholder="逗号分隔，例：心理学, 认知">
       </div>
     </div>`;
+  if(typeof initSplitResizer === 'function') initSplitResizer();
   if(opts.push !== false) pushHistory({type:'extract', path: fp});
 }
 

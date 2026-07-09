@@ -108,6 +108,21 @@ def get_file_type(filepath):
     return 'unknown'
 
 
+def _parse_concept_sections(body):
+    """从概念正文解析结构化字段（兼容 frontmatter 未存这些字段的文件）"""
+    definition = ''
+    m = re.search(r'^>\s*(.+?)\s*$', body, re.MULTILINE)
+    if m:
+        definition = m.group(1).strip()
+    def sec(name):
+        pat = r'##\s*' + re.escape(name) + r'\s*\n(.*?)(?=\n##\s|\Z)'
+        mm = re.search(pat, body, re.DOTALL)
+        return mm.group(1).strip() if mm else ''
+    excerpt = sec('原文摘录')
+    content = sec('核心解释')
+    how_to_use = sec('怎么用')
+    return definition, excerpt, content, how_to_use
+
 def item_from_file(filepath):
     """从 .md 文件读条目数据"""
     text = filepath.read_text(encoding='utf-8')
@@ -127,7 +142,7 @@ def item_from_file(filepath):
             concepts = [concepts]
         else:
             concepts = []
-    return {
+    d = {
         'id': filepath.stem,
         'path': str(filepath.relative_to(VAULT_ROOT)).replace('\\', '/'),
         'type': _type,
@@ -150,12 +165,27 @@ def item_from_file(filepath):
         'due_date': fm.get('due_date', ''),
         'url': fm.get('url', ''),
         'content': content.strip(),
+        'definition': fm.get('definition', ''),
+        'how_to_use': fm.get('how_to_use', ''),
+        'excerpt': fm.get('excerpt', ''),
         'links': links,
         'created': fm.get('created', ''),
         'updated': fm.get('updated', ''),
         'mtime': stat.st_mtime * 1000,
         'size': stat.st_size,
     }
+    # 概念：结构化字段优先从正文解析（模板把它们写在正文，frontmatter 可能为空）
+    if _type == 'concept':
+        d_def, d_exc, d_con, d_how = _parse_concept_sections(content)
+        if d_def:
+            d['definition'] = d_def
+        if d_exc:
+            d['excerpt'] = d_exc
+        if d_con:
+            d['content'] = d_con
+        if d_how:
+            d['how_to_use'] = d_how
+    return d
 
 
 def search_items(query):

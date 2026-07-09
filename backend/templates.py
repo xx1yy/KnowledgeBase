@@ -299,3 +299,16 @@ def _build_frontmatter(fm):
         else:
             lines.append(f'{k}: {v}')
     return '\n'.join(lines)
+
+
+def concept_display_body(title, definition, source, excerpt, content, how_to_use):
+    """按模板格式生成概念正文（definition/excerpt/how_to_use/content 为正文唯一来源）"""
+    return (
+        f"# {title}\n\n"
+        f"> {definition}\n\n"
+        f"## 来源\n- [[{source}]]\n\n"
+        f"## 原文摘录\n{excerpt}\n\n"
+        f"## 核心解释\n{content}\n\n"
+        f"## 怎么用\n{how_to_use}\n\n"
+        f"## 关联概念\n"
+    )

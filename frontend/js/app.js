@@ -37,6 +37,18 @@ function applyRoute(state){
   if(state.type === 'detail'){ openDetail(state.path, {push:false}); return; }
   if(state.type === 'note'){ restoreNotesView(state.path, () => loadNoteContent(state.path, {push:false})); return; }
   if(state.type === 'extract'){ restoreNotesView(state.path, async () => { await loadNoteContent(state.path, {push:false}); showExtractConcept(state.path, {push:false}); }); return; }
+  if(state.type === 'concept'){
+    const notePath = state.notePath;
+    if(notePath){
+      restoreNotesView(notePath, async () => {
+        await loadNoteContent(notePath, {push:false});
+        showConceptPage(state.conceptPath, {push:false});
+      });
+    } else {
+      showConceptPage(state.conceptPath, {push:false});
+    }
+    return;
+  }
   navigate('dashboard', {push:false});
 }
 window.addEventListener('popstate', (e)=> applyRoute(e.state));
@@ -56,7 +68,7 @@ function renderRightbar(ctx){
     _recentConcepts.slice(0, 8).forEach(c => {
       const count = (c.excerpt ? 1 : 0) + (c.definition ? 1 : 0) + (c.how_to_use ? 1 : 0);
       const fill = count >= 3 ? 'var(--accent)' : count >= 1 ? 'var(--orange)' : 'var(--faint)';
-      html += `<a class="rightbar-concept" href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
+      html += `<a class="rightbar-concept" href="#" onclick="event.preventDefault();showConceptPage('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
         <span class="rc-dot" style="background:${fill}"></span>
         <span class="rc-name">${ESC(c.title)}</span>
         <span class="rc-date">${FMTREL(c.mtime)}</span>
@@ -69,7 +81,7 @@ function renderRightbar(ctx){
   if(ctx.concepts && ctx.concepts.length){
     html += `<div class="rightbar-section">
       <div class="rightbar-h">💡 本文概念</div>
-      ${ctx.concepts.map(c => `<a class="rightbar-concept" href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
+      ${ctx.concepts.map(c => `<a class="rightbar-concept" href="#" onclick="event.preventDefault();showConceptPage('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
         <span class="rc-dot" style="background:${c.fill}"></span>
         <span class="rc-name">${ESC(c.title)}</span>
       </a>`).join('')}
@@ -237,6 +249,121 @@ async function openDetail(filepath, opts){
     info: infoLines.join('<br>') || null
   });
   if(opts.push !== false) pushHistory({type:'detail', path: filepath});
+}
+
+// 笔记页点概念：在主阅读区分栏显示概念页（左=笔记原文，右=概念），与「提取概念」布局一致，不覆盖笔记
+async function showConceptPage(filepath, opts){
+  opts = opts || {};
+  const fp = decodeURIComponent(filepath);
+  let it;
+  try{ it = await get(`/item?path=${encodeURIComponent(fp)}`); }
+  catch(e){ return alert('概念未找到'); }
+  if(!it || it.type !== 'concept'){ openDetail(filepath, {push:false}); return; }
+
+  const reader = document.getElementById('noteReader');
+  const inNote = !!reader && !!currentNotePath && !!currentNoteData;
+  if(!inNote){ openDetail(filepath, {push:false}); return; }
+
+  const parentName = (currentNotePath ? currentNotePath.split('/').slice(-2,-1)[0] : '') || it.source || '';
+
+  // 右侧栏：仅放操作（与提取概念一致）
+  renderRightbar({
+    actions: [
+      {label:'← 返回笔记', onclick:'history.back()'},
+      {label:'✏️ 编辑概念', onclick:`enterConceptEdit('${encodeURIComponent(fp)}')`, type:'primary'}
+    ],
+    info: `概念：${it.title}<br>来源：${parentName||'—'}`
+  });
+
+  reader.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span class="type-badge type-concept">💡 ${ESC(parentName)}</span>
+      <span style="font-size:13px;font-weight:600;color:var(--muted)">💡 概念详情</span>
+    </div>
+    <div class="extract-split" id="extractSplit">
+      <div class="extract-split-left">
+        <h1>${ESC(currentNoteData.title)}</h1>
+        ${renderNoteContent(currentNoteData.content)}
+      </div>
+      <div class="extract-resizer" id="splitResizer"></div>
+      <div class="extract-split-right" id="conceptPane">${conceptViewHtml(it, fp)}</div>
+    </div>`;
+
+  initSplitResizer();
+
+  if(typeof loadSourcesForConcept === 'function') loadSourcesForConcept(it.title);
+  if(opts.push !== false) pushHistory({type:'concept', conceptPath: filepath, notePath: currentNotePath});
+}
+
+function conceptViewHtml(it, fp){
+  const def = it.definition ? `<div class="extract-step">一句话定义</div><div class="extract-read">${ESC(it.definition)}</div>` : '';
+  const content = it.content ? `<div class="extract-step">核心解释</div><div class="extract-read">${renderNoteContent(it.content)}</div>` : '';
+  const how = it.how_to_use ? `<div class="extract-step">怎么用</div><div class="extract-read">${ESC(it.how_to_use)}</div>` : '';
+  const excerpt = it.excerpt ? `<div class="extract-step">原文摘录</div><blockquote class="md-quote">${ESC(it.excerpt)}</blockquote>` : '';
+  const tags = (it.tags&&it.tags.length) ? `<div class="extract-step">标签</div><div>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>` : '';
+  const domain = it.domain ? `<div class="extract-step">领域</div><div class="extract-read">${ESC(it.domain)}</div>` : '';
+  return `
+    <div style="margin-bottom:14px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted)">
+      💡 概念：<strong style="color:var(--accent)">${ESC(it.title)}</strong>
+    </div>
+    ${def}${content}${how}${excerpt}${tags}${domain}
+    <div class="extract-step">被以下笔记引用</div>
+    <div class="detail-links" id="conceptSources">加载中…</div>`;
+}
+
+async function enterConceptEdit(filepath){
+  const fp = decodeURIComponent(filepath);
+  let it;
+  try{ it = await get(`/item?path=${encodeURIComponent(fp)}`); }
+  catch(e){ return alert('概念未找到'); }
+  const pane = document.getElementById('conceptPane');
+  if(!pane) return;
+  pane.innerHTML = `
+    <div style="margin-bottom:14px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted)">
+      ✏️ 编辑概念：<strong style="color:var(--accent)">${ESC(it.title)}</strong>
+    </div>
+    <div class="extract-step">一句话定义</div>
+    <input class="extract-input" id="ce_definition" type="text" value="${ESC(it.definition||'')}" style="margin-bottom:10px">
+    <div class="extract-step">核心解释</div>
+    <textarea class="extract-area" id="ce_content" style="min-height:160px;margin-bottom:10px">${ESC(it.content||'')}</textarea>
+    <div class="extract-step">怎么用</div>
+    <textarea class="extract-area" id="ce_howto" style="min-height:90px;margin-bottom:10px">${ESC(it.how_to_use||'')}</textarea>
+    <div class="extract-step">原文摘录</div>
+    <textarea class="extract-area" id="ce_excerpt" style="min-height:90px;margin-bottom:10px">${ESC(it.excerpt||'')}</textarea>
+    <div class="extract-step">来源</div>
+    <input class="extract-input" id="ce_source" type="text" value="${ESC(it.source||'')}" style="margin-bottom:10px">
+    <div class="extract-step">领域</div>
+    <input class="extract-input" id="ce_domain" type="text" value="${ESC(it.domain||'')}" style="margin-bottom:10px">
+    <div class="extract-step">标签（逗号分隔）</div>
+    <input class="extract-input" id="ce_tags" type="text" value="${ESC((it.tags||[]).join(', '))}">`;
+  renderRightbar({
+    actions: [
+      {label:'← 返回', onclick:`showConceptPage('${encodeURIComponent(fp)}', {push:false})`},
+      {label:'💾 保存', onclick:`saveConceptEdit('${encodeURIComponent(fp)}')`, type:'primary'}
+    ],
+    info: `编辑中：${it.title}`
+  });
+}
+
+async function saveConceptEdit(filepath){
+  const fp = decodeURIComponent(filepath);
+  const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const data = {
+    definition: val('ce_definition'),
+    content: val('ce_content'),
+    how_to_use: val('ce_howto'),
+    excerpt: val('ce_excerpt'),
+    source: val('ce_source').trim(),
+    domain: val('ce_domain').trim(),
+    tags: val('ce_tags').split(/[,，、]/).map(s=>s.trim()).filter(Boolean)
+  };
+  try{
+    await put('/item', {path: fp, ...data});
+    await loadDashboard();
+    clearRecentConceptsCache();
+    await loadRecentConcepts();
+    showConceptPage(encodeURIComponent(fp), {push:false});
+  }catch(e){ alert('保存失败：' + (e && e.message ? e.message : e)); }
 }
 
 async function deleteItem(filepath){
@@ -571,6 +698,58 @@ function toggleSidebar(){
 function toggleRightbar(){
   document.body.classList.toggle('rightbar-collapsed');
   try{ localStorage.setItem('kb_rightbar', document.body.classList.contains('rightbar-collapsed')?'1':'0'); }catch(e){}
+}
+
+/* ── 可拖拽分栏分割条 ─────────────────── */
+function initSplitResizer(){
+  const resizer = document.getElementById('splitResizer');
+  const split = document.getElementById('extractSplit');
+  if(!resizer || !split) return;
+  const left = split.querySelector('.extract-split-left');
+  if(!left) return;
+
+  // 从 localStorage 恢复上次宽度
+  const saved = localStorage.getItem('kb_split_left_pct');
+  if(saved){
+    const pct = parseFloat(saved);
+    if(pct >= 20 && pct <= 70){
+      left.style.width = pct + '%';
+    }
+  }
+
+  let startX, startWidth;
+  resizer.addEventListener('mousedown', function(e){
+    e.preventDefault();
+    resizer.classList.add('active');
+    startX = e.clientX;
+    startWidth = left.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e){
+      const dx = e.clientX - startX;
+      const containerW = split.offsetWidth; // 不算 resizer 的 margin
+      let newW = startWidth + dx;
+      let newPct = (newW / containerW) * 100;
+      // 限制范围
+      newPct = Math.max(18, Math.min(68, newPct));
+      left.style.width = newPct + '%';
+    }
+    function onUp(){
+      resizer.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      // 记住比例
+      try{
+        const pct = (left.offsetWidth / split.offsetWidth) * 100;
+        localStorage.setItem('kb_split_left_pct', String(pct));
+      }catch(e){}
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 // 启动
