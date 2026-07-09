@@ -9,6 +9,7 @@ import traceback
 import urllib.parse
 import shutil
 import re
+import base64
 from pathlib import Path
 
 from backend.config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log
@@ -105,6 +106,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # API: 获取单个文件
             if path == '/api/item':
                 self._handle_get_item(params)
+                return
+
+            # API: 附件图片服务（个人知识库 内的图片文件）
+            if path.startswith('/api/file/'):
+                self._serve_file(path[len('/api/file/'):])
                 return
 
             # 静态文件（.css / .js / .png 等）
@@ -387,6 +393,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if self.path == '/api/item':
                 self._handle_create_item()
                 return
+            if self.path == '/api/upload':
+                self._handle_upload()
+                return
             self.send_error(404)
         except Exception as e:
             traceback.print_exc()
@@ -486,6 +495,86 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         item = item_from_file(filepath)
         self._send_json(item, 201)
+
+    # ── 附件图片静态服务（仅限图片类型，防目录遍历） ──
+    _IMG_MIME = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+        '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+    }
+    def _serve_file(self, rel_path):
+        rel = urllib.parse.unquote(rel_path)
+        fp = (VAULT_ROOT / rel)
+        try:
+            fp = fp.resolve()
+            root = VAULT_ROOT.resolve()
+            if not (fp == root or fp.is_relative_to(root)):
+                self.send_error(403, 'Forbidden')
+                return
+        except Exception:
+            self.send_error(403, 'Forbidden')
+            return
+        if not fp.exists() or not fp.is_file():
+            self.send_error(404, 'Not Found')
+            return
+        ext = fp.suffix.lower()
+        mime = self._IMG_MIME.get(ext)
+        if not mime:
+            self.send_error(403, 'Forbidden type')
+            return
+        try:
+            body = fp.read_bytes()
+            self.send_response(200)
+            self.send_header('Content-Type', mime)
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'public, max-age=86400')
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            self.send_error(500)
+
+    # ── 图片上传（base64 JSON） ──────────────────────────
+    def _handle_upload(self):
+        length = int(self.headers.get('Content-Length', 0))
+        if length == 0:
+            self._send_json({'error': 'Empty body'}, 400)
+            return
+        try:
+            raw = self.rfile.read(length)
+            data = json.loads(raw.decode('utf-8'))
+        except Exception:
+            self._send_json({'error': 'Bad JSON'}, 400)
+            return
+        filename = (data.get('filename') or 'image.png').strip()
+        content = data.get('content') or ''
+        # 兼容 data:image/png;base64,xxxx 与纯 base64
+        if ',' in content:
+            content = content.split(',', 1)[1]
+        try:
+            raw_bytes = base64.b64decode(content)
+        except Exception:
+            self._send_json({'error': 'Invalid base64'}, 400)
+            return
+        if not raw_bytes:
+            self._send_json({'error': 'Empty file'}, 400)
+            return
+        name = sanitize_filename(filename) or 'image.png'
+        att_dir = VAULT_ROOT / '附件'
+        att_dir.mkdir(parents=True, exist_ok=True)
+        fp = att_dir / name
+        if fp.exists():
+            stem = fp.stem
+            ext = fp.suffix or '.png'
+            name = f"{stem}_{int(time.time())}{ext}"
+            fp = att_dir / name
+        try:
+            fp.write_bytes(raw_bytes)
+        except Exception as e:
+            self._send_json({'error': 'Write failed: ' + str(e)}, 500)
+            return
+        rel = f"附件/{name}"
+        self._send_json({'url': '/api/file/' + urllib.parse.quote(rel), 'path': rel}, 201)
 
     # ── PUT 路由 ──────────────────────────────────────────
     def do_PUT(self):

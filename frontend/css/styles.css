@@ -282,6 +282,8 @@ body.sidebar-collapsed .nav-item{padding:9px 0;justify-content:center;gap:0}
 .extract-split-left li{font-size:13.5px;line-height:1.75;margin-bottom:3px}
 .extract-split-left .wl{color:var(--accent);font-weight:500}
 .note-editor{width:100%;min-height:420px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.7;resize:vertical;outline:none;font-family:inherit}
+.md-img{max-width:100%;height:auto;border-radius:var(--radius-sm);margin:8px 0;display:block;border:1px solid var(--border)}
+.note-edit-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
 .note-editor:focus{border-color:var(--accent);background:var(--surface)}
 .extract-step{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
 .extract-hint{font-size:11px;color:var(--faint);margin-top:3px}

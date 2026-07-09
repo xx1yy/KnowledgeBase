@@ -1,12 +1,35 @@
 // Markdown rendering
+// 图片路径解析：外链/绝对路径原样返回，否则视为 vault 附件路径
+function imgSrc(name){
+  name = (name||'').trim();
+  if(/^(https?:)?\/\//i.test(name) || name.startsWith('/')) return name;
+  return '/api/file/' + encodeURI(name);
+}
 function renderInline(text){
-  let html = ESC(text);
+  const imgs = [];
+  let html = text;
+  // 先把图片语法替换为占位 token，避免被下方 wikilink / 加粗正则误处理
+  html = html.replace(/!\[\[([^\]]+)\]\]/g, (m, p) => {
+    const token = '\u0000IMG' + imgs.length + '\u0000';
+    const src = imgSrc(p.trim());
+    const alt = ESC(p.trim().split('/').pop());
+    imgs.push(`<img class="md-img" src="${src}" alt="${alt}" loading="lazy">`);
+    return token;
+  });
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {
+    const token = '\u0000IMG' + imgs.length + '\u0000';
+    imgs.push(`<img class="md-img" src="${imgSrc(url.trim())}" alt="${ESC(alt)}" loading="lazy">`);
+    return token;
+  });
+  html = ESC(html);
   html = html.replace(/\[\[([^\]|#]+)(?:[|#][^\]]+)?\]\]/g, (m, l) => {
     const name = l.split('/').pop().trim();
     return `<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(name)}.md')" style="color:var(--accent);font-weight:500;text-decoration:none">${ESC(name)}</a>`;
   });
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">$1</a>');
+  // 最后把占位 token 还原为真实 img 标签
+  imgs.forEach((v, i) => { html = html.split('\u0000IMG' + i + '\u0000').join(v); });
   return html;
 }
 
@@ -145,6 +168,9 @@ function renderNoteContent(text){
       html += `<li>${renderInline(t.slice(2))}</li>`;
     } else if(t === ''){
       closeBlocks();
+    } else if(/^!\[\[[^\]]+\]\]$/.test(t) || /^!\[[^\]]*\]\([^)]+\)$/.test(t)){
+      closeBlocks();
+      html += renderInline(t);
     } else {
       closeBlocks(); html += `<p>${renderInline(t)}</p>`;
     }
