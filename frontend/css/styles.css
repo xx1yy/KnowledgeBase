@@ -183,7 +183,7 @@ body.sidebar-collapsed .nav-item{padding:9px 0;justify-content:center;gap:0}
 
 .notes-layout{display:flex;gap:14px;height:calc(100vh - 100px)}
 .notes-sidebar{width:200px;flex-shrink:0;overflow-y:auto;padding-right:2px}
-.chapter-bar{width:240px;flex-shrink:0;overflow-y:auto;padding-left:12px;padding-right:8px;border-left:1px solid var(--border)}
+.chapter-bar{width:var(--chapter-w,240px);flex-shrink:0;overflow-y:auto;padding-left:12px;padding-right:8px;border-left:1px solid var(--border)}
 .notes-reader{flex:1;overflow-y:auto}
 .chapter-resizer{width:6px;flex-shrink:0;cursor:col-resize;background:transparent;position:relative;z-index:5;transition:background .15s}
 .chapter-resizer:hover,.chapter-resizer.active{background:var(--accent)}

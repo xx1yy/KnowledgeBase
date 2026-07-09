@@ -419,10 +419,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._check_auth():
                 self.send_error(401, 'Unauthorized')
                 return
-            if self.path == '/api/item':
+            parsed = urllib.parse.urlparse(self.path)
+            path = parsed.path
+            if path == '/api/item':
                 self._handle_create_item()
                 return
-            if self.path == '/api/upload':
+            if path == '/api/upload':
                 self._handle_upload()
                 return
             self.send_error(404)
@@ -611,10 +613,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._check_auth():
                 self.send_error(401, 'Unauthorized')
                 return
-            if self.path == '/api/item':
+            parsed = urllib.parse.urlparse(self.path)
+            path = parsed.path
+            if path == '/api/item':
                 self._handle_update_item()
                 return
-            if self.path == '/api/tags':
+            if path == '/api/tags':
                 self._handle_tag_update()
                 return
             self.send_error(404)

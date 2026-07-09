@@ -257,12 +257,13 @@ function initChapterResizer(){
   const bar = document.getElementById('chapterBar');
   if(!resizer || !layout || !bar) return;
 
-  // 从 localStorage 恢复上次宽度（像素）
+  // 从 localStorage 恢复上次宽度（像素），写入 CSS 变量而非内联 width
+  // 内联 width 会覆盖 .chapters-collapsed #chapterBar{width:44px} 导致「收回章节栏」失效
   const saved = localStorage.getItem('kb_chapter_width');
   if(saved){
     const px = parseFloat(saved);
     if(px >= 160 && px <= 600){
-      bar.style.width = px + 'px';
+      layout.style.setProperty('--chapter-w', px + 'px');
     }
   }
 
@@ -280,7 +281,7 @@ function initChapterResizer(){
       let newW = startWidth + dx;
       const maxW = layout.offsetWidth * 0.6;
       newW = Math.max(160, Math.min(maxW, newW));
-      bar.style.width = newW + 'px';
+      layout.style.setProperty('--chapter-w', newW + 'px');
     }
     function onUp(){
       resizer.classList.remove('active');
