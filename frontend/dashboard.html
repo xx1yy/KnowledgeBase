@@ -14,7 +14,7 @@
     <div><div class="brand-text">个人知识库</div><div class="brand-sub">My Knowledge OS</div></div>
   </div>
   <nav class="nav" id="nav"></nav>
-  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="收起/展开侧栏">
+  <button class="sidebar-toggle" id="sidebarToggle" data-action="toggleSidebar" data-args='[]' title="收起/展开侧栏">
     <span class="st-ico">«</span><span class="st-txt">收起侧栏</span>
   </button>
 </aside>
@@ -22,36 +22,45 @@
   <header class="topbar">
     <h1 id="pageTitle">仪表盘</h1>
     <span id="apiStatus" style="font-size:12px;margin-left:8px"></span>
-    <button class="btn-g" id="rightbarReveal" onclick="toggleRightbar()" title="显示右侧栏">☰ 侧栏</button>
+    <button class="btn-g" id="rightbarReveal" data-action="toggleRightbar" data-args='[]' title="显示右侧栏">☰ 侧栏</button>
     <div class="search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" id="searchBox" placeholder="搜索全部内容…">
     </div>
-    <button class="btn-p" id="addBtn" onclick="openQuickCapture()" style="display:none">+ 快速记录</button>
+    <button class="btn-p" id="addBtn" data-action="openQuickCapture" data-args='[]' style="display:none">+ 快速记录</button>
   </header>
   <div style="display:flex;flex:1;overflow:hidden">
     <div class="content" id="content"></div>
     <aside class="rightbar" id="rightbar">
       <div class="rightbar-head">
-        <button class="rightbar-toggle" onclick="toggleRightbar()" title="收起右侧栏">▸</button>
+        <button class="rightbar-toggle" data-action="toggleRightbar" data-args='[]' title="收起右侧栏">▸</button>
       </div>
       <div class="rightbar-body" id="rightbarBody"></div>
     </aside>
   </div>
 </div>
 </div>
-<div class="modal-mask" id="modalMask" onclick="if(event.target===this)closeModal()">
+<div class="modal-mask" id="modalMask" data-action="closeModalOnMask" data-args='[]'>
   <div class="modal" id="modal"></div>
 </div>
 
-<script src="js/api.js"></script>
-<script src="js/utils.js"></script>
-<script src="js/markdown.js"></script>
-<script src="js/dashboard.js"></script>
-<script src="js/note.js"></script>
-<script src="js/graph.js"></script>
-<script src="js/tags.js"></script>
-<script src="js/domains.js"></script>
+<!-- Core: 基础设施（按依赖顺序） -->
+<script src="js/core/api.js"></script>
+<script src="js/core/utils.js"></script>
+<script src="js/core/markdown.js"></script>
+<script src="js/core/router.js"></script>
+<!-- Notes: 笔记/概念/图片 -->
+<script src="js/notes/concept-detail.js"></script>
+<script src="js/core/modals.js"></script>
+<script src="js/notes/extract-concept.js"></script>
+<script src="js/notes/image-upload.js"></script>
+<!-- Views: 各页面视图 -->
+<script src="js/views/dashboard.js"></script>
+<script src="js/notes/note.js"></script>
+<script src="js/views/graph.js"></script>
+<script src="js/views/tags.js"></script>
+<script src="js/views/domains.js"></script>
+<!-- App: 入口（导航/搜索/事件委托/初始化） -->
 <script src="js/app.js"></script>
 </body>
 </html>

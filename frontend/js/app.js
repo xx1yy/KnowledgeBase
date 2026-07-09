@@ -1,59 +1,6 @@
-// App - Navigation, Modals, Search, Init, Rightbar
-let currentView = 'dashboard';
-let _recentConcepts = null;
+// App — 导航渲染、右侧栏、搜索、侧栏折叠、分栏拖拽、事件委托、启动初始化
 
-// 加载最近概念（缓存）
-async function loadRecentConcepts(){
-  if(_recentConcepts) return _recentConcepts;
-  try{
-    const concepts = await get('/items?type=concept');
-    _recentConcepts = concepts.sort((a,b) => (b.mtime||0) - (a.mtime||0)).slice(0, 10);
-  }catch(e){
-    _recentConcepts = [];
-  }
-  return _recentConcepts;
-}
-
-function clearRecentConceptsCache(){ _recentConcepts = null; }
-
-// ── 浏览器历史栈（支持后退/前进按钮）──
-function pushHistory(state){ history.pushState(state, ''); }
-async function restoreNotesView(path, done){
-  const fp = decodeURIComponent(path);
-  let view = 'book-notes';
-  try{
-    const it = await get('/item?path=' + encodeURIComponent(fp));
-    view = it.type === 'video-notes' ? 'video-notes' : 'book-notes';
-  }catch(e){}
-  if(!document.getElementById('noteReader')){
-    currentNotesView = view;
-    if(view === 'video-notes'){ await renderVideoNotes(); } else { await renderBookNotes(); }
-  }
-  if(done) await done();
-}
-function applyRoute(state){
-  if(!state){ navigate('dashboard', {push:false}); return; }
-  if(state.type === 'view'){ navigate(state.view, {push:false}); return; }
-  if(state.type === 'detail'){ openDetail(state.path, {push:false}); return; }
-  if(state.type === 'note'){ restoreNotesView(state.path, () => loadNoteContent(state.path, {push:false})); return; }
-  if(state.type === 'extract'){ restoreNotesView(state.path, async () => { await loadNoteContent(state.path, {push:false}); showExtractConcept(state.path, {push:false}); }); return; }
-  if(state.type === 'concept'){
-    const notePath = state.notePath;
-    if(notePath){
-      restoreNotesView(notePath, async () => {
-        await loadNoteContent(notePath, {push:false});
-        showConceptPage(state.conceptPath, {push:false});
-      });
-    } else {
-      showConceptPage(state.conceptPath, {push:false});
-    }
-    return;
-  }
-  navigate('dashboard', {push:false});
-}
-window.addEventListener('popstate', (e)=> applyRoute(e.state));
-
-// 渲染右侧快捷面板
+// 渲染右侧快捷面板（最近概念 + 本文概念 + 页面操作 + 信息）
 function renderRightbar(ctx){
   const el = document.getElementById('rightbarBody');
   if(!el) return;
@@ -147,45 +94,14 @@ function renderNav(){
       <span class="nav-i">📝</span><span>文学笔记</span>
       <span class="nav-n">${counts['book-notes']||0}</span>
     </button>
-    <button class="nav-item ${currentView==='video-notes'?'active':''}" data-action="navigate" data-args='["video-notes"]'>
+    <button class="nav-item ${currentView==='video-notes'?'active':''}" data-action="navigate" data-args='["video-notes']'>
       <span class="nav-i">📺</span><span>视频笔记</span>
       <span class="nav-n">${counts['video-notes']||0}</span>
     </button>
     `;
 }
 
-async function navigate(view, opts){
-  opts = opts || {};
-  currentView = view;
-  renderNav();
-  const t = document.getElementById('pageTitle');
-  const a = document.getElementById('addBtn');
-  await loadRecentConcepts(); // 确保右侧栏有数据
-  if(view === 'dashboard'){ t.textContent = '仪表盘'; a.style.display='none'; renderDashboard(); renderRightbar({actions:[]}); }
-  else if(view === 'search'){ t.textContent = '搜索'; a.style.display='none'; renderSearch(); renderRightbar({actions:[]}); }
-  else if(view === 'graph'){ t.textContent = '知识图谱'; a.style.display='none'; renderGraph(); renderRightbar({actions:[]}); }
-  else if(view === 'book-notes'){ currentNotesView = 'book-notes'; t.textContent = '文学笔记'; a.style.display='none'; renderBookNotes(); renderRightbar({actions:[
-    {label:'＋ 新建笔记', action:'showAddNoteModal', args:[], type:'primary'}
-  ]}); }
-  else if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); renderRightbar({actions:[
-    {label:'＋ 新建笔记', action:'showAddVideoNoteModal', args:[], type:'primary'}
-  ]}); }
-  else if(view === 'tags'){ t.textContent = '标签'; a.style.display='none'; renderTags(); renderRightbar({actions:[]}); }
-  else if(view === 'domains'){ t.textContent = '领域'; a.style.display='none'; renderDomains(); renderRightbar({actions:[]}); }
-  else {
-    const ti = TYPE_MAP[view];
-    if(ti){
-      t.textContent = ti.label;
-      a.style.display='inline-flex';
-      renderList(view);
-      renderRightbar({actions:[
-        {label:'＋ 新建', action:'openQuickCapture', args:[view], type:'primary'}
-      ]});
-    }
-  }
-  if(opts.push !== false) pushHistory({type:'view', view});
-}
-
+// 详情页（通用条目详情，非概念专用）
 async function openDetail(filepath, opts){
   opts = opts || {};
   const it = await get(`/item?path=${encodeURIComponent(decodeURIComponent(filepath))}`);
@@ -252,424 +168,7 @@ async function openDetail(filepath, opts){
   if(opts.push !== false) pushHistory({type:'detail', path: filepath});
 }
 
-// 笔记页点概念：在主阅读区分栏显示概念页（左=笔记原文，右=概念），与「提取概念」布局一致，不覆盖笔记
-async function showConceptPage(filepath, opts){
-  opts = opts || {};
-  const fp = decodeURIComponent(filepath);
-  let it;
-  try{ it = await get(`/item?path=${encodeURIComponent(fp)}`); }
-  catch(e){ return alert('概念未找到'); }
-  if(!it || it.type !== 'concept'){ openDetail(filepath, {push:false}); return; }
-
-  const reader = document.getElementById('noteReader');
-  const inNote = !!reader && !!currentNotePath && !!currentNoteData;
-  if(!inNote){ openDetail(filepath, {push:false}); return; }
-
-  const parentName = (currentNotePath ? currentNotePath.split('/').slice(-2,-1)[0] : '') || it.source || '';
-
-  // 右侧栏：仅放操作（与提取概念一致）
-  renderRightbar({
-    actions: [
-      {label:'← 返回笔记', action:'history.back', args:[]},
-      {label:'✏️ 编辑概念', action:'enterConceptEdit', args:[fp], type:'primary'}
-    ],
-    info: `概念：${it.title}<br>来源：${parentName||'—'}`
-  });
-
-  reader.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <span class="type-badge type-concept">💡 ${ESC(parentName)}</span>
-      <span style="font-size:13px;font-weight:600;color:var(--muted)">💡 概念详情</span>
-    </div>
-    <div class="extract-split" id="extractSplit">
-      <div class="extract-split-left">
-        <h1>${ESC(currentNoteData.title)}</h1>
-        ${renderNoteContent(currentNoteData.content)}
-      </div>
-      <div class="extract-resizer" id="splitResizer"></div>
-      <div class="extract-split-right" id="conceptPane">${conceptViewHtml(it, fp)}</div>
-    </div>`;
-
-  initSplitResizer();
-
-  if(typeof loadSourcesForConcept === 'function') loadSourcesForConcept(it.title);
-  if(opts.push !== false) pushHistory({type:'concept', conceptPath: filepath, notePath: currentNotePath});
-}
-
-function conceptViewHtml(it, fp){
-  const def = it.definition ? `<div class="extract-step">一句话定义</div><div class="extract-read">${ESC(it.definition)}</div>` : '';
-  const content = it.content ? `<div class="extract-step">核心解释</div><div class="extract-read">${renderNoteContent(it.content)}</div>` : '';
-  const how = it.how_to_use ? `<div class="extract-step">怎么用</div><div class="extract-read">${ESC(it.how_to_use)}</div>` : '';
-  const excerpt = it.excerpt ? `<div class="extract-step">原文摘录</div><blockquote class="md-quote">${ESC(it.excerpt)}</blockquote>` : '';
-  const tags = (it.tags&&it.tags.length) ? `<div class="extract-step">标签</div><div>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>` : '';
-  const domain = it.domain ? `<div class="extract-step">领域</div><div class="extract-read">${ESC(it.domain)}</div>` : '';
-  return `
-    <div style="margin-bottom:14px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted)">
-      💡 概念：<strong style="color:var(--accent)">${ESC(it.title)}</strong>
-    </div>
-    ${def}${content}${how}${excerpt}${tags}${domain}
-    <div class="extract-step">被以下笔记引用</div>
-    <div class="detail-links" id="conceptSources">加载中…</div>`;
-}
-
-async function enterConceptEdit(filepath){
-  const fp = decodeURIComponent(filepath);
-  let it;
-  try{ it = await get(`/item?path=${encodeURIComponent(fp)}`); }
-  catch(e){ return alert('概念未找到'); }
-  const pane = document.getElementById('conceptPane');
-  if(!pane) return;
-  pane.innerHTML = `
-    <div style="margin-bottom:14px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted)">
-      ✏️ 编辑概念：<strong style="color:var(--accent)">${ESC(it.title)}</strong>
-    </div>
-    <div class="extract-step">一句话定义</div>
-    <input class="extract-input" id="ce_definition" type="text" value="${ESC(it.definition||'')}" style="margin-bottom:10px">
-    <div class="extract-step">核心解释</div>
-    <textarea class="extract-area" id="ce_content" style="min-height:160px;margin-bottom:10px">${ESC(it.content||'')}</textarea>
-    <div class="extract-step">怎么用</div>
-    <textarea class="extract-area" id="ce_howto" style="min-height:90px;margin-bottom:10px">${ESC(it.how_to_use||'')}</textarea>
-    <div class="extract-step">原文摘录</div>
-    <textarea class="extract-area" id="ce_excerpt" style="min-height:90px;margin-bottom:10px">${ESC(it.excerpt||'')}</textarea>
-    <div class="extract-step">来源</div>
-    <input class="extract-input" id="ce_source" type="text" value="${ESC(it.source||'')}" style="margin-bottom:10px">
-    <div class="extract-step">领域</div>
-    <input class="extract-input" id="ce_domain" type="text" value="${ESC(it.domain||'')}" style="margin-bottom:10px">
-    <div class="extract-step">标签（逗号分隔）</div>
-    <input class="extract-input" id="ce_tags" type="text" value="${ESC((it.tags||[]).join(', '))}">`;
-  renderRightbar({
-    actions: [
-      {label:'← 返回', action:'showConceptPage', args:[fp, {push:false}]},
-      {label:'💾 保存', action:'saveConceptEdit', args:[fp], type:'primary'}
-    ],
-    info: `编辑中：${it.title}`
-  });
-}
-
-async function saveConceptEdit(filepath){
-  const fp = decodeURIComponent(filepath);
-  const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
-  const data = {
-    definition: val('ce_definition'),
-    content: val('ce_content'),
-    how_to_use: val('ce_howto'),
-    excerpt: val('ce_excerpt'),
-    source: val('ce_source').trim(),
-    domain: val('ce_domain').trim(),
-    tags: val('ce_tags').split(/[,，、]/).map(s=>s.trim()).filter(Boolean)
-  };
-  try{
-    await put('/item', {path: fp, ...data});
-    await loadDashboard();
-    clearRecentConceptsCache();
-    await loadRecentConcepts();
-    showConceptPage(encodeURIComponent(fp), {push:false});
-  }catch(e){ alert('保存失败：' + (e && e.message ? e.message : e)); }
-}
-
-async function deleteItem(filepath){
-  const fp = decodeURIComponent(filepath);
-  if(!confirm('确定删除此条目？将移到回收站。')) return;
-  await del(`/item?path=${encodeURIComponent(fp)}`);
-  await loadDashboard();
-  navigate(currentView, {push:false});
-}
-
-async function openEdit(filepath){
-  const fp = decodeURIComponent(filepath);
-  const it = await get(`/item?path=${encodeURIComponent(fp)}`);
-  const html = `<div class="modal-head"><h3>编辑 ${ESC(it.title)}</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
-  <div class="modal-body">
-    <div class="field"><label>状态</label><select id="f_status">${makeOptions({book:['想读','在读','已读'],video:['想看','已看'],problem:['待解决','解决中','已解决'],plan:['待开始','进行中','已完成'],reflection:['']},it.type,it.status)}</select></div>
-    ${it.type==='book'||it.type==='video'?`<div class="field"><label>评分</label><select id="f_rating">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${n===it.rating?'selected':''}>${'★'.repeat(n)}${'☆'.repeat(5-n)}</option>`).join('')}</select></div>`:''}
-    ${it.type==='problem'||it.type==='plan'?`<div class="field"><label>优先级</label><select id="f_priority">${['高','中','低'].map(p=>`<option ${p===it.priority?'selected':''}>${p}</option>`).join('')}</select></div>`:''}
-    ${it.type==='reflection'?`<div class="field"><label>心情</label><select id="f_mood">${['😊 开心','😌 平静','😐 一般','😔 低落','😣 痛苦'].map(m=>`<option ${m===it.mood?'selected':''}>${m}</option>`).join('')}</select></div>`:''}
-    ${it.type==='concept'||it.type==='problem'?`<div class="field"><label>领域</label><input type="text" id="f_domain" value="${ESC(it.domain||'')}" placeholder="如：学习方法，认知心理学（多个用逗号分隔）"></div>`:''}
-    <div class="field"><label>内容</label><textarea id="f_content" style="min-height:200px">${ESC(it.content||'')}</textarea></div>
-  </div>
-  <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveEdit" data-args='${JSON.stringify([filepath])}'>保存</button></div>`;
-  document.getElementById('modal').innerHTML = html;
-  document.getElementById('modalMask').classList.add('show');
-}
-
-async function saveEdit(filepath){
-  const fp = decodeURIComponent(filepath);
-  const data = {};
-  ['status','rating','priority','mood'].forEach(k=>{
-    const el = document.getElementById('f_'+k);
-    if(el){ data[k] = k==='rating' ? parseInt(el.value) : el.value; }
-  });
-  const contentEl = document.getElementById('f_content');
-  if(contentEl) data.content = contentEl.value;
-  const domainEl = document.getElementById('f_domain');
-  if(domainEl) data.domain = domainEl.value.trim();
-  await put('/item', {path: fp, ...data});
-  closeModal();
-  await loadDashboard();
-  clearRecentConceptsCache();
-  await loadRecentConcepts();
-  openDetail(filepath, {push:false});
-}
-
-function openQuickCapture(preselectType){
-  const types = [
-    {k:'book',l:'书籍',i:'📚'},{k:'video',l:'视频',i:'🎬'},
-    {k:'concept',l:'概念',i:'💡'},{k:'reflection',l:'反思',i:'💭'},
-    {k:'problem',l:'问题',i:'❓'},{k:'plan',l:'计划',i:'🎯'},
-  ];
-  const opts = types.map(t=>`<option value="${t.k}" ${t.k===preselectType?'selected':''}>${t.i} ${t.l}</option>`).join('');
-  document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>📝 快速记录</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
-    <div class="modal-body">
-      <div class="field-row">
-        <div class="field"><label>类型</label><select id="qc_type">${opts}</select></div>
-        <div class="field"><label>标题 *</label><input type="text" id="qc_title" placeholder="标题"></div>
-      </div>
-      <div class="field" id="qc_author_f" style="display:none"><label>作者 / 来源</label><input type="text" id="qc_author" placeholder="作者或来源"></div>
-      <div class="field" id="qc_domain_f" style="display:none"><label>领域</label><input type="text" id="qc_domain" placeholder="如：学习方法，认知心理学"></div>
-      <div class="field" id="qc_source_f" style="display:none"><label>来源引用 [[链接]]</label><input type="text" id="qc_source_ref" placeholder="如 [[2-输入/书籍/《书名》]]"></div>
-      <div class="field"><label>内容</label><textarea id="qc_content" placeholder="记下你想记的…" rows="5"></textarea></div>
-      <div class="field"><label>标签</label><input type="text" id="qc_tags" placeholder="如：学习方法, 认知科学"></div>
-    </div>
-    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveQuickCapture" data-args='[]'>保存</button></div>`;
-  document.getElementById('modalMask').classList.add('show');
-  updateQCFields();
-  document.getElementById('qc_type').addEventListener('change', updateQCFields);
-}
-
-function updateQCFields(){
-  const t = document.getElementById('qc_type').value;
-  document.getElementById('qc_author_f').style.display = (t==='book'||t==='video')?'block':'none';
-  document.getElementById('qc_domain_f').style.display = (t==='concept'||t==='problem')?'block':'none';
-  document.getElementById('qc_source_f').style.display = (t==='concept'||t==='problem'||t==='plan')?'block':'none';
-}
-
-async function saveQuickCapture(){
-  const t = document.getElementById('qc_type').value;
-  const title = document.getElementById('qc_title').value.trim();
-  if(!title) return alert('请输入标题');
-  const data = {type:t, title};
-  if(t==='book'||t==='video') data[t==='book'?'author':'source'] = document.getElementById('qc_author').value.trim();
-  if(t==='concept'||t==='problem') data.domain = document.getElementById('qc_domain').value.trim();
-  const srcRef = document.getElementById('qc_source_ref').value.trim();
-  let content = document.getElementById('qc_content').value.trim();
-  if(srcRef) content = srcRef + '\n\n' + content;
-  data.content = content;
-  const tags = document.getElementById('qc_tags').value;
-  data.tags = tags.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
-  const r = await post('/item', data);
-  closeModal();
-  await loadDashboard();
-  navigate(t, {push:false});
-}
-
-function closeModal(){ document.getElementById('modalMask').classList.remove('show') }
-
-// ── 新建文学笔记弹窗 ──
-function showAddNoteModal(){
-  const books = window._bookList || [];
-  const bookOptions = books.map(b => `<option value="${ESC(b.title)}">${ESC(b.title)}</option>`).join('');
-
-  document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>📝 新建文学笔记</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
-    <div class="modal-body">
-      <div class="form-group" style="margin-bottom:16px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">关联书籍</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="noteBookSelect" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-change="onNoteBookChange">
-            <option value="__new__">＋ 输入新书名…</option>
-            ${bookOptions}
-          </select>
-        </div>
-        <input id="noteBookInput" type="text" placeholder="输入新书名称" style="display:none;width:100%;padding:8px 12px;margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-input="autoFillNoteTitle">
-      </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">笔记标题</label>
-        <input id="noteTitleInput" type="text" placeholder="文学笔记标题" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none">
-      </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">章节（可选）</label>
-        <input id="noteChapterInput" list="noteChapterList" type="text" placeholder="如：第3章 记忆（留空归入「未分章」）" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none">
-        <datalist id="noteChapterList"></datalist>
-      </div>
-      <div class="form-group">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">初始内容（可选）</label>
-        <textarea id="noteContentInput" placeholder="摘录、金句、随手笔记…" style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;resize:vertical;outline:none;font-family:inherit"></textarea>
-      </div>
-    </div>
-    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveNewNote" data-args='[]'>创建</button></div>`;
-  document.getElementById('modalMask').classList.add('show');
-
-  if(books.length){
-    document.getElementById('noteBookSelect').selectedIndex = 1;
-    onNoteBookChange();
-  }
-  updateChapterSuggestions();
-}
-
-// 章节备选：按所选书籍去重，避免重复选项
-function updateChapterSuggestions(){
-  const sel = document.getElementById('noteBookSelect');
-  const dl = document.getElementById('noteChapterList');
-  if(!dl || !sel) return;
-  const books = window._bookList || [];
-  const notes = window._allBookNotes || [];
-  let folder = null;
-  if(sel.value && sel.value !== '__new__'){
-    const b = books.find(x => x.title === sel.value);
-    folder = b ? b.path.split('/').slice(-2, -1)[0] : null;
-  }
-  const seen = new Set();
-  const opts = [];
-  for(const n of notes){
-    if(!n.chapter) continue;
-    if(folder){
-      const nf = n.path.split('/').slice(-2, -1)[0];
-      if(nf !== folder) continue;
-    }
-    if(seen.has(n.chapter)) continue;
-    seen.add(n.chapter);
-    opts.push(`<option value="${ESC(n.chapter)}">`);
-  }
-  dl.innerHTML = opts.join('');
-}
-
-function onNoteBookChange(){
-  const sel = document.getElementById('noteBookSelect');
-  const input = document.getElementById('noteBookInput');
-  if(sel.value === '__new__'){
-    input.style.display = 'block';
-    input.focus();
-    document.getElementById('noteTitleInput').value = '';
-  } else {
-    input.style.display = 'none';
-    autoFillNoteTitle();
-  }
-  updateChapterSuggestions();
-}
-
-function autoFillNoteTitle(){
-  const sel = document.getElementById('noteBookSelect');
-  let bookName = '';
-  if(sel.value === '__new__'){
-    bookName = document.getElementById('noteBookInput').value.trim();
-  } else {
-    bookName = sel.value;
-  }
-  const titleInput = document.getElementById('noteTitleInput');
-  if(bookName && (!titleInput.value || titleInput.value.endsWith('-文学笔记'))){
-    titleInput.value = bookName + '-文学笔记';
-  }
-}
-
-async function saveNewNote(){
-  const sel = document.getElementById('noteBookSelect');
-  let parent = '';
-  if(sel.value === '__new__'){
-    parent = document.getElementById('noteBookInput').value.trim();
-    if(!parent){ alert('请输入书名或选择已有书籍'); return; }
-  } else {
-    parent = sel.value;
-  }
-  const title = document.getElementById('noteTitleInput').value.trim() || (parent + '-文学笔记');
-  const content = document.getElementById('noteContentInput').value.trim();
-  const chapter = document.getElementById('noteChapterInput').value.trim();
-
-  try{
-    await post('/item', {type:'book-notes', title:title, parent:parent, content:content, chapter:chapter});
-    closeModal();
-    await loadDashboard();
-    await renderBookNotes();
-  }catch(e){
-    alert('创建失败：' + e.message);
-  }
-}
-
-// ── 新建视频笔记弹窗 ──
-function showAddVideoNoteModal(){
-  const videos = window._videoList || [];
-  const videoOptions = videos.map(v => `<option value="${ESC(v.title)}">${ESC(v.title)}</option>`).join('');
-
-  document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>📺 新建视频笔记</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
-    <div class="modal-body">
-      <div class="form-group" style="margin-bottom:16px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">关联视频</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="noteVideoSelect" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-change="onNoteVideoChange">
-            <option value="__new__">＋ 输入新视频名…</option>
-            ${videoOptions}
-          </select>
-        </div>
-        <input id="noteVideoInput" type="text" placeholder="输入新视频名称" style="display:none;width:100%;padding:8px 12px;margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-input="autoFillVideoNoteTitle">
-      </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">笔记标题</label>
-        <input id="noteVideoTitleInput" type="text" placeholder="视频笔记标题" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none">
-      </div>
-      <div class="form-group">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">初始内容（可选）</label>
-        <textarea id="noteVideoContentInput" placeholder="摘录、金句、随手笔记…" style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;resize:vertical;outline:none;font-family:inherit"></textarea>
-      </div>
-    </div>
-    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveNewVideoNote" data-args='[]'>创建</button></div>`;
-  document.getElementById('modalMask').classList.add('show');
-
-  if(videos.length){
-    document.getElementById('noteVideoSelect').selectedIndex = 1;
-    onNoteVideoChange();
-  }
-}
-
-function onNoteVideoChange(){
-  const sel = document.getElementById('noteVideoSelect');
-  const input = document.getElementById('noteVideoInput');
-  if(sel.value === '__new__'){
-    input.style.display = 'block';
-    input.focus();
-    document.getElementById('noteVideoTitleInput').value = '';
-  } else {
-    input.style.display = 'none';
-    autoFillVideoNoteTitle();
-  }
-}
-
-function autoFillVideoNoteTitle(){
-  const sel = document.getElementById('noteVideoSelect');
-  let videoName = '';
-  if(sel.value === '__new__'){
-    videoName = document.getElementById('noteVideoInput').value.trim();
-  } else {
-    videoName = sel.value;
-  }
-  const titleInput = document.getElementById('noteVideoTitleInput');
-  if(videoName && (!titleInput.value || titleInput.value.endsWith('-视频笔记'))){
-    titleInput.value = videoName + '-视频笔记';
-  }
-}
-
-async function saveNewVideoNote(){
-  const sel = document.getElementById('noteVideoSelect');
-  let parent = '';
-  if(sel.value === '__new__'){
-    parent = document.getElementById('noteVideoInput').value.trim();
-    if(!parent){ alert('请输入视频名或选择已有视频'); return; }
-  } else {
-    parent = sel.value;
-  }
-  const title = document.getElementById('noteVideoTitleInput').value.trim() || (parent + '-视频笔记');
-  const content = document.getElementById('noteVideoContentInput').value.trim();
-
-  try{
-    await post('/item', {type:'video-notes', title:title, parent:parent, content:content});
-    closeModal();
-    await loadDashboard();
-    await renderVideoNotes();
-  }catch(e){
-    alert('创建失败：' + e.message);
-  }
-}
-
+// 搜索
 let searchTimer;
 async function renderSearch(){
   const q = document.getElementById('searchBox').value.trim();
@@ -686,7 +185,7 @@ async function renderSearch(){
   </div>`).join('');
 }
 
-// 侧边栏搜索
+// 侧边栏搜索输入监听
 document.getElementById('searchBox').addEventListener('input', function(){
   if(currentView==='search') renderSearch();
 });
@@ -729,10 +228,9 @@ function initSplitResizer(){
 
     function onMove(e){
       const dx = e.clientX - startX;
-      const containerW = split.offsetWidth; // 不算 resizer 的 margin
+      const containerW = split.offsetWidth;
       let newW = startWidth + dx;
       let newPct = (newW / containerW) * 100;
-      // 限制范围
       newPct = Math.max(18, Math.min(68, newPct));
       left.style.width = newPct + '%';
     }
@@ -742,7 +240,6 @@ function initSplitResizer(){
       document.body.style.userSelect = '';
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      // 记住比例
       try{
         const pct = (left.offsetWidth / split.offsetWidth) * 100;
         localStorage.setItem('kb_split_left_pct', String(pct));
@@ -764,13 +261,27 @@ function initEventDelegation(){
     const el = e.target.closest('[data-action]');
     if(!el) return;
     const action = el.dataset.action;
+
+    // 特殊处理：遮罩层关闭（仅当点击目标是遮罩本身）
+    if(action === 'closeModalOnMask' && e.target !== el) return;
+
     let args = [];
     try{ args = JSON.parse(el.dataset.args || '[]'); }catch(ex){ args = []; }
-    if(typeof window[action] === 'function'){
-      window[action](...args);
-      // 如果元素有 href="#" 且不是真正的链接，阻止默认行为
-      if(el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
+
+    // 支持复合动作 "funcA|funcB"
+    const actions = action.split('|');
+    for(const a of actions){
+      const fnName = a.trim();
+      if(!fnName) continue;
+      if(typeof window[fnName] === 'function'){
+        // 每个子动作取对应的参数；若只有一组 args 则所有子动作共用
+        const argIdx = actions.indexOf(a);
+        const subArgs = (argIdx >= 0 && Array.isArray(args[argIdx])) ? args[argIdx] : args;
+        window[fnName](...subArgs);
+      }
     }
+    // 如果元素有 href="#" 且不是真正的链接，阻止默认行为
+    if(el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
   });
 
   // change 事件委托（select 等）
@@ -794,23 +305,20 @@ function initEventDelegation(){
   });
 
   // 拖拽事件委托（dragstart/dragover/dragend/drop）
-  // 用 data-drag-start/data-drag-over/data-drag-drop 指定函数名，data-args 传参数
-  // drag 事件需要传 event 对象作为第一个参数
   ['dragstart','dragover','dragend','drop'].forEach(evtType => {
     const dataAttr = 'data-drag-' + evtType;
     const camel = 'drag' + evtType.charAt(0).toUpperCase() + evtType.slice(1);
     root.addEventListener(evtType, function(e){
       const el = e.target.closest('[' + dataAttr + ']');
       if(!el) return;
-      const action = el.dataset[camel]; // e.g., el.dataset.dragStart
+      const action = el.dataset[camel];
       let rawArgs = el.dataset.args || '[]';
-      // drop 事件可以用 data-drop-args 覆盖默认参数
       if(evtType === 'drop' && el.dataset.dropArgs) rawArgs = el.dataset.dropArgs;
       let args = [];
       try{ args = JSON.parse(rawArgs); }catch(ex){ args = []; }
       if(typeof window[action] === 'function'){
         window[action](e, ...args);
-        e.preventDefault(); // 防止浏览器默认拖放行为
+        e.preventDefault();
       }
     });
   });
@@ -828,10 +336,12 @@ function initEventDelegation(){
     renderDashboard();
     history.replaceState({type:'view', view:'dashboard'}, '');
     renderRightbar({actions:[]});
-    initEventDelegation();   // 初始化事件委托
   }catch(e){
+    console.error('[KB] init error:', e);
     document.getElementById('content').innerHTML =
-      '<div class="empty"><div class="big">🔴</div>无法连接服务<p style="margin-top:10px;color:var(--faint)">请先双击运行「启动知识库.bat」</p></div>';
+      '<div class="empty"><div class="big">🔴</div>初始化错误<p style="margin-top:10px;color:var(--faint)">'+ESC(e.message||e)+'</p></div>';
   }
+  // 无论上面是否出错，事件委托必须注册（否则所有按钮无法点击）
+  try { initEventDelegation(); } catch(e){ console.error('[KB] initEventDelegation error:', e); }
   updateApiStatus();
 })();
