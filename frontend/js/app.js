@@ -250,6 +250,53 @@ function initSplitResizer(){
   });
 }
 
+/* ── 章节栏宽度拖拽调整 ─────────────── */
+function initChapterResizer(){
+  const resizer = document.getElementById('chapterResizer');
+  const layout = document.querySelector('.notes-layout');
+  const bar = document.getElementById('chapterBar');
+  if(!resizer || !layout || !bar) return;
+
+  // 从 localStorage 恢复上次宽度（像素）
+  const saved = localStorage.getItem('kb_chapter_width');
+  if(saved){
+    const px = parseFloat(saved);
+    if(px >= 160 && px <= 600){
+      bar.style.width = px + 'px';
+    }
+  }
+
+  let startX, startWidth;
+  resizer.addEventListener('mousedown', function(e){
+    e.preventDefault();
+    resizer.classList.add('active');
+    startX = e.clientX;
+    startWidth = bar.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e){
+      const dx = e.clientX - startX;
+      let newW = startWidth + dx;
+      const maxW = layout.offsetWidth * 0.6;
+      newW = Math.max(160, Math.min(maxW, newW));
+      bar.style.width = newW + 'px';
+    }
+    function onUp(){
+      resizer.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      try{
+        localStorage.setItem('kb_chapter_width', String(bar.offsetWidth));
+      }catch(e){}
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
 /* ── 统一事件委托（替代内联 onclick，消除 XSS 风险） ── */
 function initEventDelegation(){
   // 挂载到 document 而非 #content，确保 nav / rightbar / modal 等所有区域的 data-action 都能响应

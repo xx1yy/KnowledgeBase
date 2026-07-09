@@ -61,10 +61,13 @@ async function renderBookNotes(){
           </div>`).join('')}
       </div>
       <div class="chapter-bar" id="chapterBar"></div>
+      <div class="chapter-resizer" id="chapterResizer" title="拖拽调整章节栏宽度"></div>
       <div class="notes-reader" id="noteReader">
         <div class="empty"><div class="big">📖</div>选择左侧书籍与章节开始阅读</div>
       </div>
     </div>`;
+
+  initChapterResizer();
 
   if(entries.length){
     selectBook(entries[0].folder, {loadFirst:true});
