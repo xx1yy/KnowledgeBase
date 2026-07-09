@@ -12,7 +12,7 @@ import re
 import base64
 from pathlib import Path
 
-from backend.config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log
+from backend.config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log, AUTH_TOKEN
 from backend.vault import (
     parse_frontmatter, extract_wikilinks, list_md_files,
     item_from_file, search_items, get_graph_data, sanitize_filename,
@@ -35,9 +35,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.dumps(data, ensure_ascii=False, default=str).encode('utf-8')
             self.send_response(status)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
+            # 不再设置 Access-Control-Allow-Origin: *，仅允许同源请求
             self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -50,6 +50,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(length).decode('utf-8'))
 
+    def _check_auth(self):
+        """校验请求中的 token（query string 或 header），返回 True/False"""
+        if not AUTH_TOKEN:
+            return True  # 未启用认证时放行
+        # 优先从 query 取 token（方便浏览器直接访问 URL）
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        qt = params.get('t', [None])[0]
+        # 其次从 header 取
+        ht = self.headers.get('X-Auth-Token', '')
+        token = qt or ht
+        import hmac
+        return hmac.compare_digest(token or '', AUTH_TOKEN)
+
     def do_OPTIONS(self):
         self._send_json({}, 204)
 
@@ -58,12 +72,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
-            params = urllib.parse.parse_qs(parsed.query)
 
-            # 前端页面
+            # 前端页面（不需要认证）
             if path == '/' or path == '/index.html':
                 self._serve_frontend()
                 return
+
+            # 公开端点：返回认证 token（用于前端初始化）
+            if path == '/api/token':
+                self._send_json({'token': AUTH_TOKEN})
+                return
+
+            # API 路由需要认证
+            if path.startswith('/api/') and not self._check_auth():
+                self.send_error(401, 'Unauthorized')
+                return
+
+            params = urllib.parse.parse_qs(parsed.query)
 
             # API: ping
             if path == '/api/ping':
@@ -391,6 +416,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # ── POST 路由 ─────────────────────────────────────────
     def do_POST(self):
         try:
+            if not self._check_auth():
+                self.send_error(401, 'Unauthorized')
+                return
             if self.path == '/api/item':
                 self._handle_create_item()
                 return
@@ -580,6 +608,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # ── PUT 路由 ──────────────────────────────────────────
     def do_PUT(self):
         try:
+            if not self._check_auth():
+                self.send_error(401, 'Unauthorized')
+                return
             if self.path == '/api/item':
                 self._handle_update_item()
                 return
@@ -650,6 +681,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # ── DELETE 路由 ───────────────────────────────────────
     def do_DELETE(self):
         try:
+            if not self._check_auth():
+                self.send_error(401, 'Unauthorized')
+                return
             parsed = urllib.parse.urlparse(self.path)
             params = urllib.parse.parse_qs(parsed.query)
             file_path = params.get('path', [''])[0]

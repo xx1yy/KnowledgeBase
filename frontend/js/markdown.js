@@ -24,7 +24,7 @@ function renderInline(text){
   html = ESC(html);
   html = html.replace(/\[\[([^\]|#]+)(?:[|#][^\]]+)?\]\]/g, (m, l) => {
     const name = l.split('/').pop().trim();
-    return `<a href="#" onclick="event.preventDefault();showConceptPage('${encodeURIComponent(name)}.md')" style="color:var(--accent);font-weight:500;text-decoration:none">${ESC(name)}</a>`;
+    return `<a href="#" data-action="showConceptPage" data-args='${JSON.stringify([name+".md"])}' style="color:var(--accent);font-weight:500;text-decoration:none">${ESC(name)}</a>`;
   });
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">$1</a>');

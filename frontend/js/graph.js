@@ -47,7 +47,7 @@ function drawGraph(data){
       if(!s||!t)return'';
       return`<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="#dde0ed" stroke-width="1.2"/>`;
     }).join('')}
-    ${Object.values(nodeMap).map(n=>`<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(n.path)}')">
+    ${Object.values(nodeMap).map(n=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}'>
       <circle cx="${n.x}" cy="${n.y}" r="${Math.max(1,Math.min(12,4+n.id.length*0.5)+5)}" fill="${colors[n.type]||'#999'}" opacity=".85" stroke="white" stroke-width="2"/>
     </a>`).join('')}
     ${Object.values(nodeMap).map(n=>`<text x="${n.x}" y="${n.y+22}" text-anchor="middle" font-size="11" fill="#333" font-family="system-ui" style="pointer-events:none">${ESC(n.label.slice(0,8))}</text>`).join('')}

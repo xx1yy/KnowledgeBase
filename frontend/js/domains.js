@@ -1,4 +1,8 @@
 // Domains - 领域索引（MOC 枢纽式聚合视图）
+function closeModalThenOpenDetail(path){
+  closeModal();
+  openDetail(path);
+}
 async function renderDomains(){
   let domains;
   try{
@@ -28,7 +32,7 @@ async function renderDomains(){
     <p style="color:var(--muted);margin-bottom:14px;font-size:13px">共 ${domains.length} 个领域 · 点击领域查看所属概念与问题，按类型分组。这是你知识库的「枢纽」——概念先归到领域，再慢慢连。</p>
     <div class="tag-cloud">
       ${domains.map(d=>`<div class="tag-chip" style="font-size:${sizeFor(d.count)}px" title="${d.count} 条">
-        <span class="tag-chip-name" onclick="viewDomainItems('${encodeURIComponent(d.name)}')">${ESC(d.name)}</span>
+        <span class="tag-chip-name" data-action="viewDomainItems" data-args='${JSON.stringify([d.name])}'>${ESC(d.name)}</span>
         <span class="tag-chip-count">${d.count}</span>
       </div>`).join('')}
     </div>`;
@@ -60,7 +64,7 @@ async function viewDomainItems(name){
   const groupHtml = typeList.map(t=>`
     <div class="detail-section">
       <h4>${TYPE_MAP[t]?.label||t} · ${groups[t].length}</h4>
-      ${groups[t].map(it=>`<div class="panel" style="cursor:pointer;margin-bottom:6px;padding:9px 12px" onclick="closeModal();openDetail('${encodeURIComponent(it.path)}')">
+      ${groups[t].map(it=>`<div class="panel" style="cursor:pointer;margin-bottom:6px;padding:9px 12px" data-action="closeModalThenOpenDetail" data-args='${JSON.stringify([it.path])}'>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:13.5px;font-weight:600">${ESC(it.title)}</span>
           <span style="font-size:11px;color:var(--faint);margin-left:auto">${FMTREL(it.mtime)}</span>
@@ -69,10 +73,10 @@ async function viewDomainItems(name){
     </div>`).join('');
 
   document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>🗂️ ${ESC(name)} · ${items.length} 条</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-head"><h3>🗂️ ${ESC(name)} · ${items.length} 条</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
     <div class="modal-body" style="max-height:62vh;overflow:auto">
       ${groupHtml || '<div class="empty-hint">该领域下暂无条目</div>'}
     </div>
-    <div class="modal-foot"><button class="btn-g" onclick="closeModal()">关闭</button></div>`;
+    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>关闭</button></div>`;
   document.getElementById('modalMask').classList.add('show');
 }

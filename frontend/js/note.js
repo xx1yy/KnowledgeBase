@@ -25,7 +25,7 @@ async function loadSourcesForConcept(conceptName){
     const iconMap = {'book-notes':'📝','video-notes':'📺'};
     el.innerHTML = sources.map(n => {
       const parent = n.path.split('/').slice(-2,-1)[0] || '未知';
-      return `<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(n.path)}')" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;margin-bottom:4px">${iconMap[n.type]||'📄'} ${ESC(parent)} — ${ESC(String(n.title||'').replace(/-文学笔记|-视频笔记/g,''))}</a>`;
+      return `<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}' style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;margin-bottom:4px">${iconMap[n.type]||'📄'} ${ESC(parent)} — ${ESC(String(n.title||'').replace(/-文学笔记|-视频笔记/g,''))}</a>`;
     }).join('');
   }catch(e){
     el.innerHTML = '<span style="color:var(--faint)">加载失败</span>';
@@ -45,7 +45,7 @@ async function renderBookNotes(){
   window._allBookNotes = notes;
 
   if(!notes.length){
-    document.getElementById('content').innerHTML = `<div class="empty"><div class="big">📝</div>还没有文学笔记<br><span style="font-size:12px;color:var(--faint);margin-bottom:16px;display:block">添加书籍时会自动创建，也可以手动新建</span><button class="btn-p" onclick="showAddNoteModal()">＋ 新建文学笔记</button></div>`;
+    document.getElementById('content').innerHTML = `<div class="empty"><div class="big">📝</div>还没有文学笔记<br><span style="font-size:12px;color:var(--faint);margin-bottom:16px;display:block">添加书籍时会自动创建，也可以手动新建</span><button class="btn-p" data-action="showAddNoteModal" data-args='[]'>＋ 新建文学笔记</button></div>`;
     return;
   }
 
@@ -73,11 +73,11 @@ async function renderBookNotes(){
   document.getElementById('content').innerHTML = `
     <div class="notes-layout">
       <div class="notes-sidebar" id="bookList">
-        <div class="nb-head"><button class="nb-toggle" onclick="toggleBooks()" title="收起/展开书籍栏">«</button></div>
-        <button class="btn-p" style="width:100%;margin-bottom:8px;justify-content:center" onclick="showAddNoteModal()">＋ 新建文学笔记</button>
+        <div class="nb-head"><button class="nb-toggle" data-action="toggleBooks" data-args='[]' title="收起/展开书籍栏">«</button></div>
+        <button class="btn-p" style="width:100%;margin-bottom:8px;justify-content:center" data-action="showAddNoteModal" data-args='[]'>＋ 新建文学笔记</button>
         <div class="distill-summary">${notes.length}篇 · ${notes.filter(n=>(n.concepts||[]).length).length}篇已提炼 · ${notes.reduce((s,n)=>s+(n.concepts||[]).length,0)}概念</div>
         ${entries.map(e => `
-          <div class="book-item" data-folder="${ESC(e.folder)}" onclick="selectBook('${ESC(e.folder)}')">
+          <div class="book-item" data-folder="${ESC(e.folder)}" data-action="selectBook" data-args='${JSON.stringify([e.folder])}'>
             <span class="bi">📚</span>
             <span class="bt">${ESC(e.title)}</span>
             <span class="bc">${(byFolder[e.folder]||[]).length}</span>
@@ -108,9 +108,9 @@ function noteItemHtml(n, folder, ch){
   const cc = (n.concepts||[]).length;
   const fp = n.path.replace(/[^a-zA-Z0-9]/g, '');
   const drag = noteManualSort
-    ? ` draggable="true" ondragstart="noteDragStart(event,'${encodeURIComponent(n.path)}')" ondragover="noteDragOver(event)" ondragend="noteDragEnd(event)" ondrop="noteDrop(event,'${encodeURIComponent(folder||'')}','${encodeURIComponent(ch||'')}','${encodeURIComponent(n.path)}')"`
+    ? ` draggable="true" data-drag-start="noteDragStart" data-args='${JSON.stringify([n.path])}' data-drag-over="noteDragOver" data-drag-end="noteDragEnd" data-drag-drop="noteDrop" data-drop-args='${JSON.stringify([folder||'',ch||'',n.path])}'`
     : '';
-  return `<div class="note-item${noteManualSort?' draggable':''}" id="ni-${fp}"${drag} onclick="loadNoteContent('${encodeURIComponent(n.path)}')">
+  return `<div class="note-item${noteManualSort?' draggable':''}" id="ni-${fp}"${drag} data-action="loadNoteContent" data-args='${JSON.stringify([n.path])}'>
     <div class="nt">${ESC(String(n.title||'').replace(/-文学笔记$/,''))}${cc?`<span class="concept-badge">💡${cc}</span>`:''}</div>
     <div class="nd">${FMTREL(n.mtime)}</div>
   </div>`;
@@ -133,7 +133,7 @@ function renderChapterBar(folder){
   const bookNotes = window._bookNotesByFolder[folder] || [];
   const bookTitle = window._bookFolderTitles[folder] || folder;
   if(!bookNotes.length){
-    bar.innerHTML = `<div class="chapter-bar-h"><span class="cb-title">📚 ${ESC(bookTitle)}</span><button class="ch-toggle" onclick="toggleChapters()" title="收起/展开章节栏">«</button></div><div class="chapter-empty">📭 ${ESC(bookTitle)} 还没有笔记</div>`;
+    bar.innerHTML = `<div class="chapter-bar-h"><span class="cb-title">📚 ${ESC(bookTitle)}</span><button class="ch-toggle" data-action="toggleChapters" data-args='[]' title="收起/展开章节栏">«</button></div><div class="chapter-empty">📭 ${ESC(bookTitle)} 还没有笔记</div>`;
     return;
   }
   // 按章节分组
@@ -155,21 +155,21 @@ function renderChapterBar(folder){
     return sortNotes(arr, noteSortMode);
   };
   bar.innerHTML = `
-    <div class="chapter-bar-h"><span class="cb-title">📚 ${ESC(bookTitle)}</span><button class="ch-toggle" onclick="toggleChapters()" title="收起/展开章节栏">«</button></div>
+    <div class="chapter-bar-h"><span class="cb-title">📚 ${ESC(bookTitle)}</span><button class="ch-toggle" data-action="toggleChapters" data-args='[]' title="收起/展开章节栏">«</button></div>
     <div class="chapter-bar-sub">${bookNotes.length}篇 · ${names.length}个章节</div>
     <div class="sort-bar ${noteManualSort?'manual':''}">
-      <select id="noteSortSel" onchange="changeNoteSort(this.value)" ${noteManualSort?'disabled':''}>
+      <select id="noteSortSel" data-change="changeNoteSort" ${noteManualSort?'disabled':''}>
         <option value="mtime" ${noteSortMode==='mtime'?'selected':''}>按修改时间 新→旧</option>
         <option value="ctime" ${noteSortMode==='ctime'?'selected':''}>按创建时间 新→旧</option>
         <option value="title" ${noteSortMode==='title'?'selected':''}>按标题 A→Z</option>
       </select>
       ${noteManualSort
-        ? `<button class="btn-p sm" onclick="toggleNoteManualSort(false)">↺ 恢复自动</button><span class="sort-hint">✋ 拖拽笔记调整顺序</span>`
-        : `<button class="btn-g sm" onclick="toggleNoteManualSort(true)">✋ 手动排序</button>`}
+        ? `<button class="btn-p sm" data-action="toggleNoteManualSort" data-args='[false]'>↺ 恢复自动</button><span class="sort-hint">✋ 拖拽笔记调整顺序</span>`
+        : `<button class="btn-g sm" data-action="toggleNoteManualSort" data-args='[true]'>✋ 手动排序</button>`}
     </div>
     ${names.map(ch => `
       <div class="chapter-group">
-        <div class="chapter-h2" onclick="loadChapterFirst('${ESC(folder)}','${ESC(ch)}')"><span class="ch-dot">📖</span><span class="ch-name">${ESC(ch)}</span><span class="ch-count">${groups[ch].length}</span></div>
+        <div class="chapter-h2" data-action="loadChapterFirst" data-args='${JSON.stringify([folder, ch])}'><span class="ch-dot">📖</span><span class="ch-name">${ESC(ch)}</span><span class="ch-count">${groups[ch].length}</span></div>
         ${notesOf(ch).map(n => noteItemHtml(n, folder, ch)).join('')}
       </div>`).join('')}
   `;
@@ -275,7 +275,7 @@ async function renderVideoNotes(){
   window._videoList = videos;
 
   if(!notes.length){
-    document.getElementById('content').innerHTML = `<div class="empty"><div class="big">📺</div>还没有视频笔记<br><span style="font-size:12px;color:var(--faint);margin-bottom:16px;display:block">添加视频时会自动创建，也可以手动新建</span><button class="btn-p" onclick="showAddVideoNoteModal()">＋ 新建视频笔记</button></div>`;
+    document.getElementById('content').innerHTML = `<div class="empty"><div class="big">📺</div>还没有视频笔记<br><span style="font-size:12px;color:var(--faint);margin-bottom:16px;display:block">添加视频时会自动创建，也可以手动新建</span><button class="btn-p" data-action="showAddVideoNoteModal" data-args='[]'>＋ 新建视频笔记</button></div>`;
     return;
   }
 
@@ -290,7 +290,7 @@ async function renderVideoNotes(){
   document.getElementById('content').innerHTML = `
     <div class="notes-layout">
       <div class="notes-sidebar" id="notesList">
-        <button class="btn-p" style="width:100%;margin-bottom:8px;justify-content:center" onclick="showAddVideoNoteModal()">＋ 新建视频笔记</button>
+        <button class="btn-p" style="width:100%;margin-bottom:8px;justify-content:center" data-action="showAddVideoNoteModal" data-args='[]'>＋ 新建视频笔记</button>
         <div class="distill-summary">${notes.length}篇笔记 · ${notes.filter(n=>(n.concepts||[]).length).length}篇已提炼 · ${notes.reduce((s,n)=>s+(n.concepts||[]).length,0)}个概念</div>
         ${Object.entries(grouped).map(([video, videoNotes]) => `
           <div class="note-group">
@@ -298,7 +298,7 @@ async function renderVideoNotes(){
             ${videoNotes.map(n => {
               const cc = (n.concepts||[]).length;
               return `
-              <div class="note-item" id="ni-${n.path.replace(/[^a-zA-Z0-9]/g,'')}" onclick="loadNoteContent('${encodeURIComponent(n.path)}')">
+              <div class="note-item" id="ni-${n.path.replace(/[^a-zA-Z0-9]/g,'')}" data-action="loadNoteContent" data-args='${JSON.stringify([n.path])}'>
                 <div class="nt">${ESC(String(n.title||'').replace(/-视频笔记$/,''))}${cc?`<span class="concept-badge">💡${cc}</span>`:''}</div>
                 <div class="nd">${FMTREL(n.mtime)}</div>
               </div>`;
@@ -359,14 +359,14 @@ async function loadNoteContent(filepath, opts){
           <input type="text" id="noteChapterEdit" value="${ESC(it.chapter||'')}" placeholder="如：第3章 记忆（留空归入「未分章」）" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none;box-sizing:border-box">
         </div>
         <div class="note-edit-toolbar">
-          <button class="btn-g sm" id="insertImgBtn" type="button" onclick="triggerImageUpload()">🖼 插入图片</button>
+          <button class="btn-g sm" id="insertImgBtn" type="button" data-action="triggerImageUpload" data-args='[]'>🖼 插入图片</button>
           <span class="extract-hint" style="margin:0">图片存入知识库「附件」目录，以 ![[附件/名称]] 引用</span>
-          <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="onImageSelected(this)">
+          <input type="file" id="imgFileInput" accept="image/*" style="display:none" data-change="onImageSelected">
         </div>
         <textarea class="note-editor" id="noteTextarea">${ESC(it.content||'')}</textarea>
         <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
-          <button class="btn-g" onclick="cancelNoteEdit()">取消</button>
-          <button class="btn-p" onclick="saveNoteContent()">💾 保存</button>
+          <button class="btn-g" data-action="cancelNoteEdit" data-args='[]'>取消</button>
+          <button class="btn-p" data-action="saveNoteContent" data-args='[]'>💾 保存</button>
         </div>
       </div>
     </div>`;
@@ -400,7 +400,7 @@ async function loadConceptsForNote(conceptNames){
             const count = (c.excerpt ? 1 : 0) + (c.definition ? 1 : 0) + (c.how_to_use ? 1 : 0);
             const fill = count >= 3 ? 'var(--accent)' : count >= 1 ? 'var(--orange)' : 'var(--faint)';
             const tip = count >= 3 ? '完整' : count >= 1 ? '部分' : '仅名称';
-            return `<a href="#" onclick="event.preventDefault();showConceptPage('${encodeURIComponent(c.path)}')"
+            return `<a href="#" data-action="showConceptPage" data-args='${JSON.stringify([c.path])}'
               style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--asoft);color:var(--accent);border-radius:var(--radius-sm);font-size:12.5px;font-weight:500;text-decoration:none;transition:all .12s"
               onmouseover="this.style.background='var(--accent)';this.style.color='#fff'"
               onmouseout="this.style.background='var(--asoft)';this.style.color='var(--accent)'"

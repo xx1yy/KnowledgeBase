@@ -2,12 +2,32 @@
 # -*- coding: utf-8 -*-
 """配置常量与通用工具"""
 
-import time
+import os, secrets, time
 from pathlib import Path
 
 PORT = 16000
 VAULT_ROOT = Path(__file__).parent.parent / "个人知识库"
 FRONTEND_FILE = Path(__file__).parent.parent / "frontend" / "dashboard.html"
+TOKEN_FILE = Path(__file__).parent.parent / ".kb_token"
+
+
+def get_auth_token():
+    """读取或生成 API 认证 token（持久化到 .kb_token 文件）"""
+    if TOKEN_FILE.exists():
+        try:
+            return TOKEN_FILE.read_text(encoding='utf-8').strip()
+        except Exception:
+            pass
+    token = secrets.token_hex(24)  # 48 字符，足够安全
+    try:
+        TOKEN_FILE.write_text(token, encoding='utf-8')
+    except Exception:
+        pass
+    return token
+
+
+# 启动时立即加载 token（全局单例）
+AUTH_TOKEN = get_auth_token()
 
 # 目录名 → 类型映射
 DIR_TYPE = {

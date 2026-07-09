@@ -18,6 +18,7 @@ def main():
     os.chdir(str(Path(__file__).parent.parent))
     config.log("个人知识库服务启动")
     config.log(f"  Vault: {config.VAULT_ROOT}")
+    config.log(f"  Token: {config.AUTH_TOKEN}")
 
     # Auto-select free port
     actual_port = None

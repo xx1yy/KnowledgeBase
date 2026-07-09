@@ -68,7 +68,7 @@ function renderRightbar(ctx){
     _recentConcepts.slice(0, 8).forEach(c => {
       const count = (c.excerpt ? 1 : 0) + (c.definition ? 1 : 0) + (c.how_to_use ? 1 : 0);
       const fill = count >= 3 ? 'var(--accent)' : count >= 1 ? 'var(--orange)' : 'var(--faint)';
-      html += `<a class="rightbar-concept" href="#" onclick="event.preventDefault();showConceptPage('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
+      html += `<a class="rightbar-concept" href="#" data-action="showConceptPage" data-args='${JSON.stringify([c.path])}' title="${ESC(c.title)}">
         <span class="rc-dot" style="background:${fill}"></span>
         <span class="rc-name">${ESC(c.title)}</span>
         <span class="rc-date">${FMTREL(c.mtime)}</span>
@@ -81,7 +81,7 @@ function renderRightbar(ctx){
   if(ctx.concepts && ctx.concepts.length){
     html += `<div class="rightbar-section">
       <div class="rightbar-h">💡 本文概念</div>
-      ${ctx.concepts.map(c => `<a class="rightbar-concept" href="#" onclick="event.preventDefault();showConceptPage('${encodeURIComponent(c.path)}')" title="${ESC(c.title)}">
+      ${ctx.concepts.map(c => `<a class="rightbar-concept" href="#" data-action="showConceptPage" data-args='${JSON.stringify([c.path])}' title="${ESC(c.title)}">
         <span class="rc-dot" style="background:${c.fill}"></span>
         <span class="rc-name">${ESC(c.title)}</span>
       </a>`).join('')}
@@ -94,13 +94,14 @@ function renderRightbar(ctx){
       <div class="rightbar-h">⚡ 页面操作</div>
       <div class="rightbar-actions">
         ${ctx.actions.map(a => {
+          const args = a.args ? JSON.stringify(a.args) : '[]';
           if(a.type === 'danger'){
-            return `<button class="btn-g btn-danger" onclick="${a.onclick}">${a.label}</button>`;
+            return `<button class="btn-g btn-danger" data-action="${a.action}" data-args='${args}'>${a.label}</button>`;
           }
           if(a.type === 'primary'){
-            return `<button class="btn-p" onclick="${a.onclick}">${a.label}</button>`;
+            return `<button class="btn-p" data-action="${a.action}" data-args='${args}'>${a.label}</button>`;
           }
-          return `<button class="btn-g" onclick="${a.onclick}">${a.label}</button>`;
+          return `<button class="btn-g" data-action="${a.action}" data-args='${args}'>${a.label}</button>`;
         }).join('')}
       </div>
     </div>`;
@@ -120,37 +121,37 @@ function renderRightbar(ctx){
 function renderNav(){
   document.getElementById('nav').innerHTML = `
     <div class="nav-label">总览</div>
-    <button class="nav-item ${currentView==='dashboard'?'active':''}" onclick="navigate('dashboard')">
+    <button class="nav-item ${currentView==='dashboard'?'active':''}" data-action="navigate" data-args='["dashboard"]'>
       <span class="nav-i">🏠</span><span>仪表盘</span>
     </button>
-    <button class="nav-item ${currentView==='search'?'active':''}" onclick="navigate('search')">
+    <button class="nav-item ${currentView==='search'?'active':''}" data-action="navigate" data-args='["search"]'>
       <span class="nav-i">🔍</span><span>搜索</span>
     </button>
-    <button class="nav-item ${currentView==='graph'?'active':''}" onclick="navigate('graph')">
+    <button class="nav-item ${currentView==='graph'?'active':''}" data-action="navigate" data-args='["graph"]'>
       <span class="nav-i">🕸️</span><span>知识图谱</span>
     </button>
-    <button class="nav-item ${currentView==='tags'?'active':''}" onclick="navigate('tags')">
+    <button class="nav-item ${currentView==='tags'?'active':''}" data-action="navigate" data-args='["tags"]'>
       <span class="nav-i">🏷️</span><span>标签</span>
       <span class="nav-n">${counts['tagCount']||0}</span>
     </button>
-    <button class="nav-item ${currentView==='domains'?'active':''}" onclick="navigate('domains')">
+    <button class="nav-item ${currentView==='domains'?'active':''}" data-action="navigate" data-args='["domains"]'>
       <span class="nav-i">🗂️</span><span>领域</span>
       <span class="nav-n">${counts['domainCount']||0}</span>
     </button>
     <div class="nav-label">内容</div>
-    ${TYPES.map(t=>`<button class="nav-item ${currentView===t.key?'active':''}" onclick="navigate('${t.key}')">
+    ${TYPES.map(t=>`<button class="nav-item ${currentView===t.key?'active':''}" data-action="navigate" data-args='${JSON.stringify([t.key])}'>
       <span class="nav-i">${t.icon}</span><span>${t.label}</span>
       <span class="nav-n">${counts[t.key]||0}</span>
     </button>`).join('')}
-    <button class="nav-item ${currentView==='book-notes'?'active':''}" onclick="navigate('book-notes')">
+    <button class="nav-item ${currentView==='book-notes'?'active':''}" data-action="navigate" data-args='["book-notes"]'>
       <span class="nav-i">📝</span><span>文学笔记</span>
       <span class="nav-n">${counts['book-notes']||0}</span>
     </button>
-    <button class="nav-item ${currentView==='video-notes'?'active':''}" onclick="navigate('video-notes')">
+    <button class="nav-item ${currentView==='video-notes'?'active':''}" data-action="navigate" data-args='["video-notes"]'>
       <span class="nav-i">📺</span><span>视频笔记</span>
       <span class="nav-n">${counts['video-notes']||0}</span>
     </button>
-  `;
+    `;
 }
 
 async function navigate(view, opts){
@@ -164,10 +165,10 @@ async function navigate(view, opts){
   else if(view === 'search'){ t.textContent = '搜索'; a.style.display='none'; renderSearch(); renderRightbar({actions:[]}); }
   else if(view === 'graph'){ t.textContent = '知识图谱'; a.style.display='none'; renderGraph(); renderRightbar({actions:[]}); }
   else if(view === 'book-notes'){ currentNotesView = 'book-notes'; t.textContent = '文学笔记'; a.style.display='none'; renderBookNotes(); renderRightbar({actions:[
-    {label:'＋ 新建笔记', onclick:'showAddNoteModal()', type:'primary'}
+    {label:'＋ 新建笔记', action:'showAddNoteModal', args:[], type:'primary'}
   ]}); }
   else if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); renderRightbar({actions:[
-    {label:'＋ 新建笔记', onclick:'showAddVideoNoteModal()', type:'primary'}
+    {label:'＋ 新建笔记', action:'showAddVideoNoteModal', args:[], type:'primary'}
   ]}); }
   else if(view === 'tags'){ t.textContent = '标签'; a.style.display='none'; renderTags(); renderRightbar({actions:[]}); }
   else if(view === 'domains'){ t.textContent = '领域'; a.style.display='none'; renderDomains(); renderRightbar({actions:[]}); }
@@ -178,7 +179,7 @@ async function navigate(view, opts){
       a.style.display='inline-flex';
       renderList(view);
       renderRightbar({actions:[
-        {label:'＋ 新建', onclick:`openQuickCapture('${view}')`, type:'primary'}
+        {label:'＋ 新建', action:'openQuickCapture', args:[view], type:'primary'}
       ]});
     }
   }
@@ -190,7 +191,7 @@ async function openDetail(filepath, opts){
   const it = await get(`/item?path=${encodeURIComponent(decodeURIComponent(filepath))}`);
   if(it.error) return alert('文件未找到');
   const t = TYPE_MAP[it.type];
-  let html = `<div class="detail"><span class="detail-back" onclick="history.back()">← 返回${t?.label||''}</span>`;
+  let html = `<div class="detail"><span class="detail-back" data-action="history.back" data-args='[]'>← 返回${t?.label||''}</span>`;
   html += `<div class="detail-card">`;
   html += `<div class="detail-title">${ESC(it.title)}</div>`;
   html += `<div class="detail-meta">`;
@@ -213,18 +214,18 @@ async function openDetail(filepath, opts){
     const allBooks = await get(`/items?type=book`);
     const notes = allBooks.filter(b => b.type==='book-notes' && b.path.startsWith(it.path.replace(/[^/]+\.md$/,'')));
     if(notes.length){
-      html += `<div class="detail-section"><h4>📝 文学笔记</h4><div class="detail-links">${notes.map(n=>`<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(n.path)}')">📄 ${ESC(n.title)}</a>`).join(' · ')}</div></div>`;
+      html += `<div class="detail-section"><h4>📝 文学笔记</h4><div class="detail-links">${notes.map(n=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}'>📄 ${ESC(n.title)}</a>`).join(' · ')}</div></div>`;
     }
   }
   if(it.type==='video'){
     const allVideos = await get(`/items?type=video`);
     const notes = allVideos.filter(v => v.type==='video-notes' && v.path.startsWith(it.path.replace(/[^/]+\.md$/,'')));
     if(notes.length){
-      html += `<div class="detail-section"><h4>📺 视频笔记</h4><div class="detail-links">${notes.map(n=>`<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(n.path)}')">📄 ${ESC(n.title)}</a>`).join(' · ')}</div></div>`;
+      html += `<div class="detail-section"><h4>📺 视频笔记</h4><div class="detail-links">${notes.map(n=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}'>📄 ${ESC(n.title)}</a>`).join(' · ')}</div></div>`;
     }
   }
-  html += `<div class="detail-section"><h4>链接</h4><div class="detail-links">${(it.links||[]).map(l=>`<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(l)}.md')">[[${ESC(l)}]]</a>`).join(' · ')||'无'}</div></div>`;
-  if(it.backlinks&&it.backlinks.length) html += `<div class="detail-section"><h4>被以下引用</h4><div class="detail-links">${it.backlinks.map(bl=>`<a href="#" onclick="event.preventDefault();openDetail('${encodeURIComponent(bl.path)}')">← ${ESC(bl.title)} (${TYPE_MAP[bl.type]?.label||bl.type})</a>`).join(' · ')}</div></div>`;
+  html += `<div class="detail-section"><h4>链接</h4><div class="detail-links">${(it.links||[]).map(l=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([l+".md"])}'>[[${ESC(l)}]]</a>`).join(' · ')||'无'}</div></div>`;
+  if(it.backlinks&&it.backlinks.length) html += `<div class="detail-section"><h4>被以下引用</h4><div class="detail-links">${it.backlinks.map(bl=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([bl.path])}'>← ${ESC(bl.title)} (${TYPE_MAP[bl.type]?.label||bl.type})</a>`).join(' · ')}</div></div>`;
   html += `<div class="detail-meta" style="font-size:11px;color:var(--faint)">创建于 ${FMT(it.created)} · 更新于 ${FMT(it.updated)} · 文件: ${it.path}</div>`;
   html += `</div></div>`;
   document.getElementById('content').innerHTML = html;
@@ -243,8 +244,8 @@ async function openDetail(filepath, opts){
   if(it.concepts && it.concepts.length) infoLines.push(`相关概念：${it.concepts.length}个`);
   renderRightbar({
     actions: [
-      {label:'✏️ 编辑', onclick:`openEdit('${encodeURIComponent(it.path)}')`},
-      {label:'🗑 删除', onclick:`deleteItem('${encodeURIComponent(it.path)}')`, type:'danger'}
+      {label:'✏️ 编辑', action:'openEdit', args:[it.path]},
+      {label:'🗑 删除', action:'deleteItem', args:[it.path], type:'danger'}
     ],
     info: infoLines.join('<br>') || null
   });
@@ -269,8 +270,8 @@ async function showConceptPage(filepath, opts){
   // 右侧栏：仅放操作（与提取概念一致）
   renderRightbar({
     actions: [
-      {label:'← 返回笔记', onclick:'history.back()'},
-      {label:'✏️ 编辑概念', onclick:`enterConceptEdit('${encodeURIComponent(fp)}')`, type:'primary'}
+      {label:'← 返回笔记', action:'history.back', args:[]},
+      {label:'✏️ 编辑概念', action:'enterConceptEdit', args:[fp], type:'primary'}
     ],
     info: `概念：${it.title}<br>来源：${parentName||'—'}`
   });
@@ -338,8 +339,8 @@ async function enterConceptEdit(filepath){
     <input class="extract-input" id="ce_tags" type="text" value="${ESC((it.tags||[]).join(', '))}">`;
   renderRightbar({
     actions: [
-      {label:'← 返回', onclick:`showConceptPage('${encodeURIComponent(fp)}', {push:false})`},
-      {label:'💾 保存', onclick:`saveConceptEdit('${encodeURIComponent(fp)}')`, type:'primary'}
+      {label:'← 返回', action:'showConceptPage', args:[fp, {push:false}]},
+      {label:'💾 保存', action:'saveConceptEdit', args:[fp], type:'primary'}
     ],
     info: `编辑中：${it.title}`
   });
@@ -377,7 +378,7 @@ async function deleteItem(filepath){
 async function openEdit(filepath){
   const fp = decodeURIComponent(filepath);
   const it = await get(`/item?path=${encodeURIComponent(fp)}`);
-  const html = `<div class="modal-head"><h3>编辑 ${ESC(it.title)}</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+  const html = `<div class="modal-head"><h3>编辑 ${ESC(it.title)}</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
   <div class="modal-body">
     <div class="field"><label>状态</label><select id="f_status">${makeOptions({book:['想读','在读','已读'],video:['想看','已看'],problem:['待解决','解决中','已解决'],plan:['待开始','进行中','已完成'],reflection:['']},it.type,it.status)}</select></div>
     ${it.type==='book'||it.type==='video'?`<div class="field"><label>评分</label><select id="f_rating">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${n===it.rating?'selected':''}>${'★'.repeat(n)}${'☆'.repeat(5-n)}</option>`).join('')}</select></div>`:''}
@@ -386,7 +387,7 @@ async function openEdit(filepath){
     ${it.type==='concept'||it.type==='problem'?`<div class="field"><label>领域</label><input type="text" id="f_domain" value="${ESC(it.domain||'')}" placeholder="如：学习方法，认知心理学（多个用逗号分隔）"></div>`:''}
     <div class="field"><label>内容</label><textarea id="f_content" style="min-height:200px">${ESC(it.content||'')}</textarea></div>
   </div>
-  <div class="modal-foot"><button class="btn-g" onclick="closeModal()">取消</button><button class="btn-p" onclick="saveEdit('${filepath}')">保存</button></div>`;
+  <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveEdit" data-args='${JSON.stringify([filepath])}'>保存</button></div>`;
   document.getElementById('modal').innerHTML = html;
   document.getElementById('modalMask').classList.add('show');
 }
@@ -418,7 +419,7 @@ function openQuickCapture(preselectType){
   ];
   const opts = types.map(t=>`<option value="${t.k}" ${t.k===preselectType?'selected':''}>${t.i} ${t.l}</option>`).join('');
   document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>📝 快速记录</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-head"><h3>📝 快速记录</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
     <div class="modal-body">
       <div class="field-row">
         <div class="field"><label>类型</label><select id="qc_type">${opts}</select></div>
@@ -430,7 +431,7 @@ function openQuickCapture(preselectType){
       <div class="field"><label>内容</label><textarea id="qc_content" placeholder="记下你想记的…" rows="5"></textarea></div>
       <div class="field"><label>标签</label><input type="text" id="qc_tags" placeholder="如：学习方法, 认知科学"></div>
     </div>
-    <div class="modal-foot"><button class="btn-g" onclick="closeModal()">取消</button><button class="btn-p" onclick="saveQuickCapture()">保存</button></div>`;
+    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveQuickCapture" data-args='[]'>保存</button></div>`;
   document.getElementById('modalMask').classList.add('show');
   updateQCFields();
   document.getElementById('qc_type').addEventListener('change', updateQCFields);
@@ -470,17 +471,17 @@ function showAddNoteModal(){
   const bookOptions = books.map(b => `<option value="${ESC(b.title)}">${ESC(b.title)}</option>`).join('');
 
   document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>📝 新建文学笔记</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-head"><h3>📝 新建文学笔记</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
     <div class="modal-body">
       <div class="form-group" style="margin-bottom:16px">
         <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">关联书籍</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <select id="noteBookSelect" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" onchange="onNoteBookChange()">
+          <select id="noteBookSelect" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-change="onNoteBookChange">
             <option value="__new__">＋ 输入新书名…</option>
             ${bookOptions}
           </select>
         </div>
-        <input id="noteBookInput" type="text" placeholder="输入新书名称" style="display:none;width:100%;padding:8px 12px;margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" oninput="autoFillNoteTitle()">
+        <input id="noteBookInput" type="text" placeholder="输入新书名称" style="display:none;width:100%;padding:8px 12px;margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-input="autoFillNoteTitle">
       </div>
       <div class="form-group" style="margin-bottom:16px">
         <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">笔记标题</label>
@@ -496,7 +497,7 @@ function showAddNoteModal(){
         <textarea id="noteContentInput" placeholder="摘录、金句、随手笔记…" style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;resize:vertical;outline:none;font-family:inherit"></textarea>
       </div>
     </div>
-    <div class="modal-foot"><button class="btn-g" onclick="closeModal()">取消</button><button class="btn-p" onclick="saveNewNote()">创建</button></div>`;
+    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveNewNote" data-args='[]'>创建</button></div>`;
   document.getElementById('modalMask').classList.add('show');
 
   if(books.length){
@@ -590,17 +591,17 @@ function showAddVideoNoteModal(){
   const videoOptions = videos.map(v => `<option value="${ESC(v.title)}">${ESC(v.title)}</option>`).join('');
 
   document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>📺 新建视频笔记</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-head"><h3>📺 新建视频笔记</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
     <div class="modal-body">
       <div class="form-group" style="margin-bottom:16px">
         <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">关联视频</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <select id="noteVideoSelect" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" onchange="onNoteVideoChange()">
+          <select id="noteVideoSelect" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-change="onNoteVideoChange">
             <option value="__new__">＋ 输入新视频名…</option>
             ${videoOptions}
           </select>
         </div>
-        <input id="noteVideoInput" type="text" placeholder="输入新视频名称" style="display:none;width:100%;padding:8px 12px;margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" oninput="autoFillVideoNoteTitle()">
+        <input id="noteVideoInput" type="text" placeholder="输入新视频名称" style="display:none;width:100%;padding:8px 12px;margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none" data-input="autoFillVideoNoteTitle">
       </div>
       <div class="form-group" style="margin-bottom:16px">
         <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block">笔记标题</label>
@@ -611,7 +612,7 @@ function showAddVideoNoteModal(){
         <textarea id="noteVideoContentInput" placeholder="摘录、金句、随手笔记…" style="width:100%;min-height:100px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;resize:vertical;outline:none;font-family:inherit"></textarea>
       </div>
     </div>
-    <div class="modal-foot"><button class="btn-g" onclick="closeModal()">取消</button><button class="btn-p" onclick="saveNewVideoNote()">创建</button></div>`;
+    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveNewVideoNote" data-args='[]'>创建</button></div>`;
   document.getElementById('modalMask').classList.add('show');
 
   if(videos.length){
@@ -675,7 +676,7 @@ async function renderSearch(){
   if(!q) return document.getElementById('content').innerHTML = `<div class="empty"><div class="big">🔍</div>输入关键词搜索</div>`;
   const results = await get(`/search?q=${encodeURIComponent(q)}`);
   if(!results.length) return document.getElementById('content').innerHTML = `<div class="empty"><div class="big">🔍</div>没有找到「${ESC(q)}」</div>`;
-  document.getElementById('content').innerHTML = `<p style="color:var(--muted);margin-bottom:14px">找到 ${results.length} 条结果</p>` + results.map(r=>`<div class="panel" style="cursor:pointer" onclick="openDetail('${encodeURIComponent(r.path)}')">
+  document.getElementById('content').innerHTML = `<p style="color:var(--muted);margin-bottom:14px">找到 ${results.length} 条结果</p>` + results.map(r=>`<div class="panel" style="cursor:pointer" data-action="openDetail" data-args='${JSON.stringify([r.path])}'>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
       <span class="type-badge ${TYPE_MAP[r.type]?.typeCls||''}">${TYPE_MAP[r.type]?.label||r.type}</span>
       <span style="font-size:12px;color:var(--faint)">${FMTREL(r.mtime)}</span>
@@ -752,17 +753,82 @@ function initSplitResizer(){
   });
 }
 
+/* ── 统一事件委托（替代内联 onclick，消除 XSS 风险） ── */
+function initEventDelegation(){
+  // 挂载到 document 而非 #content，确保 nav / rightbar / modal 等所有区域的 data-action 都能响应
+  const root = document;
+  if(!root) return;
+
+  // click 事件委托：data-action + data-args(JSON 数组)
+  root.addEventListener('click', function(e){
+    const el = e.target.closest('[data-action]');
+    if(!el) return;
+    const action = el.dataset.action;
+    let args = [];
+    try{ args = JSON.parse(el.dataset.args || '[]'); }catch(ex){ args = []; }
+    if(typeof window[action] === 'function'){
+      window[action](...args);
+      // 如果元素有 href="#" 且不是真正的链接，阻止默认行为
+      if(el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
+    }
+  });
+
+  // change 事件委托（select 等）
+  root.addEventListener('change', function(e){
+    const el = e.target.closest('[data-change]');
+    if(!el) return;
+    const action = el.dataset.change;
+    if(typeof window[action] === 'function'){
+      window[action](e.target.value, el);
+    }
+  });
+
+  // input 事件委托
+  root.addEventListener('input', function(e){
+    const el = e.target.closest('[data-input]');
+    if(!el) return;
+    const action = el.dataset.input;
+    if(typeof window[action] === 'function'){
+      window[action](e.target.value, el);
+    }
+  });
+
+  // 拖拽事件委托（dragstart/dragover/dragend/drop）
+  // 用 data-drag-start/data-drag-over/data-drag-drop 指定函数名，data-args 传参数
+  // drag 事件需要传 event 对象作为第一个参数
+  ['dragstart','dragover','dragend','drop'].forEach(evtType => {
+    const dataAttr = 'data-drag-' + evtType;
+    const camel = 'drag' + evtType.charAt(0).toUpperCase() + evtType.slice(1);
+    root.addEventListener(evtType, function(e){
+      const el = e.target.closest('[' + dataAttr + ']');
+      if(!el) return;
+      const action = el.dataset[camel]; // e.g., el.dataset.dragStart
+      let rawArgs = el.dataset.args || '[]';
+      // drop 事件可以用 data-drop-args 覆盖默认参数
+      if(evtType === 'drop' && el.dataset.dropArgs) rawArgs = el.dataset.dropArgs;
+      let args = [];
+      try{ args = JSON.parse(rawArgs); }catch(ex){ args = []; }
+      if(typeof window[action] === 'function'){
+        window[action](e, ...args);
+        e.preventDefault(); // 防止浏览器默认拖放行为
+      }
+    });
+  });
+}
+
 // 启动
 (async function init(){
   try{
     if(localStorage.getItem('kb_sidebar')==='1') document.body.classList.add('sidebar-collapsed');
     if(localStorage.getItem('kb_rightbar')==='1') document.body.classList.add('rightbar-collapsed');
+    await fetchAuthToken();   // 先获取认证 token
     await loadDashboard();
     await loadRecentConcepts();
     renderNav();
     renderDashboard();
     history.replaceState({type:'view', view:'dashboard'}, '');
     renderRightbar({actions:[]});
+    initEventDelegation();   // 初始化事件委托
   }catch(e){
     document.getElementById('content').innerHTML =
       '<div class="empty"><div class="big">🔴</div>无法连接服务<p style="margin-top:10px;color:var(--faint)">请先双击运行「启动知识库.bat」</p></div>';

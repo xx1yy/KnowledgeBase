@@ -1,4 +1,8 @@
 // Tags - 标签云 & 标签管理
+function closeModalThenOpenDetail(path){
+  closeModal();
+  openDetail(path);
+}
 async function renderTags(){
   let tags;
   try{
@@ -28,11 +32,11 @@ async function renderTags(){
     <p style="color:var(--muted);margin-bottom:14px;font-size:13px">共 ${tags.length} 个标签 · 点击标签查看所属条目，悬停右侧可重命名或删除</p>
     <div class="tag-cloud">
       ${tags.map(t=>`<div class="tag-chip" style="font-size:${sizeFor(t.count)}px" title="${t.count} 条">
-        <span class="tag-chip-name" onclick="viewTagItems('${encodeURIComponent(t.name)}')">${ESC(t.name)}</span>
+        <span class="tag-chip-name" data-action="viewTagItems" data-args='${JSON.stringify([t.name])}'>${ESC(t.name)}</span>
         <span class="tag-chip-count">${t.count}</span>
         <span class="tag-chip-actions">
-          <button class="tag-mini" title="重命名" onclick="renameTag('${encodeURIComponent(t.name)}')">✎</button>
-          <button class="tag-mini tag-del" title="删除" onclick="deleteTag('${encodeURIComponent(t.name)}')">×</button>
+          <button class="tag-mini" title="重命名" data-action="renameTag" data-args='${JSON.stringify([t.name])}'>✎</button>
+          <button class="tag-mini tag-del" title="删除" data-action="deleteTag" data-args='${JSON.stringify([t.name])}'>×</button>
         </span>
       </div>`).join('')}
     </div>`;
@@ -54,9 +58,9 @@ async function viewTagItems(name){
   items.sort((a,b)=>(b.mtime||0)-(a.mtime||0));
 
   document.getElementById('modal').innerHTML = `
-    <div class="modal-head"><h3>🏷️ ${ESC(name)} · ${items.length} 条</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-head"><h3>🏷️ ${ESC(name)} · ${items.length} 条</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
     <div class="modal-body" style="max-height:62vh;overflow:auto">
-      ${items.length ? items.map(it=>`<div class="panel" style="cursor:pointer;margin-bottom:8px" onclick="closeModal();openDetail('${encodeURIComponent(it.path)}')">
+      ${items.length ? items.map(it=>`<div class="panel" style="cursor:pointer;margin-bottom:8px" data-action="closeModalThenOpenDetail" data-args='${JSON.stringify([it.path])}'>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="type-badge ${TYPE_MAP[it.type]?.typeCls||''}">${TYPE_MAP[it.type]?.label||it.type}</span>
           <span style="font-size:13.5px;font-weight:600">${ESC(it.title)}</span>
@@ -64,7 +68,7 @@ async function viewTagItems(name){
         </div>
       </div>`).join('') : '<div class="empty-hint">该标签下暂无条目</div>'}
     </div>
-    <div class="modal-foot"><button class="btn-g" onclick="closeModal()">关闭</button></div>`;
+    <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>关闭</button></div>`;
   document.getElementById('modalMask').classList.add('show');
 }
 
