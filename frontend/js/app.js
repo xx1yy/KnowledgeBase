@@ -94,7 +94,7 @@ function renderNav(){
       <span class="nav-i">📝</span><span>文学笔记</span>
       <span class="nav-n">${counts['book-notes']||0}</span>
     </button>
-    <button class="nav-item ${currentView==='video-notes'?'active':''}" data-action="navigate" data-args='["video-notes']'>
+    <button class="nav-item ${currentView==='video-notes'?'active':''}" data-action="navigate" data-args='["video-notes"]'>
       <span class="nav-i">📺</span><span>视频笔记</span>
       <span class="nav-n">${counts['video-notes']||0}</span>
     </button>
@@ -107,7 +107,7 @@ async function openDetail(filepath, opts){
   const it = await get(`/item?path=${encodeURIComponent(decodeURIComponent(filepath))}`);
   if(it.error) return alert('文件未找到');
   const t = TYPE_MAP[it.type];
-  let html = `<div class="detail"><span class="detail-back" data-action="history.back" data-args='[]'>← 返回${t?.label||''}</span>`;
+  let html = `<div class="detail"><span class="detail-back" data-action="goBack" data-args='[]'>← 返回${t?.label||''}</span>`;
   html += `<div class="detail-card">`;
   html += `<div class="detail-title">${ESC(it.title)}</div>`;
   html += `<div class="detail-meta">`;

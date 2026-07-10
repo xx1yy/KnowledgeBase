@@ -3,6 +3,9 @@ let currentView = 'dashboard';
 
 function pushHistory(state){ history.pushState(state, ''); }
 
+// 显式返回上一页（替代 data-action="history.back" 的属性链解析，更可靠）
+function goBack(){ history.back(); }
+
 async function restoreNotesView(path, done){
   const fp = decodeURIComponent(path);
   let view = 'book-notes';

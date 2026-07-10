@@ -469,7 +469,7 @@ async function loadNoteContent(filepath, opts){
     <div class="note-reader-card">
       <div class="note-reader-toolbar">
         <span class="type-badge ${badgeCls}">${icon} ${ESC(parentName)}</span>
-        ${it.chapter ? `<span class="type-badge badge-gray">📖 ${ESC(it.chapter)}</span>` : ''}
+        ${!isVideo && it.chapter ? `<span class="type-badge badge-gray">📖 ${ESC(it.chapter)}</span>` : ''}
         ${conceptCount ? `<span class="concept-badge">💡 ${conceptCount}个概念</span>` : ''}
         <span style="font-size:11px;color:var(--faint);margin-left:auto">更新于 ${FMT(it.updated||it.mtime)}</span>
       </div>
@@ -483,10 +483,10 @@ async function loadNoteContent(filepath, opts){
           <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;display:block">笔记标题</label>
           <input type="text" id="noteTitleEdit" value="${ESC(it.title)}" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;font-weight:600;outline:none;box-sizing:border-box">
         </div>
-        <div class="field" style="margin-bottom:12px">
+        ${!isVideo ? `<div class="field" style="margin-bottom:12px">
           <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;display:block">章节（可选）</label>
           <input type="text" id="noteChapterEdit" value="${ESC(it.chapter||'')}" placeholder="如：第3章 记忆（留空归入「未分章」）" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none;box-sizing:border-box">
-        </div>
+        </div>` : ''}
         <div class="note-edit-toolbar">
           <button class="btn-g sm" id="insertImgBtn" type="button" data-action="triggerImageUpload" data-args='[]'>🖼 插入图片</button>
           <span class="extract-hint" style="margin:0">图片存入知识库「附件」目录，以 ![[附件/名称]] 引用</span>
@@ -525,8 +525,9 @@ async function saveNoteContent(){
   const titleEl = document.getElementById('noteTitleEdit');
   const title = titleEl ? titleEl.value.trim() : '';
   const chapterEl = document.getElementById('noteChapterEdit');
-  const chapter = chapterEl ? chapterEl.value.trim() : '';
-  const data = {path: currentNotePath, content: content, chapter: chapter};
+  const chapter = (!isVideo && chapterEl) ? chapterEl.value.trim() : '';
+  const data = {path: currentNotePath, content: content};
+  if(!isVideo && chapter) data.chapter = chapter;
   if(title) data.title = title;
   try{
     await put('/item', data);
