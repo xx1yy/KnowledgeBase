@@ -62,5 +62,7 @@
 <script src="js/views/domains.js"></script>
 <!-- App: 入口（导航/搜索/事件委托/初始化） -->
 <script src="js/app.js"></script>
+<!-- Actions: 显式动作注册表 + 分发器（必须最后加载，供 app.js / router.js 解耦调用） -->
+<script src="js/core/actions.js"></script>
 </body>
 </html>

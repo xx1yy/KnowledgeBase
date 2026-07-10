@@ -186,7 +186,7 @@ async function openDetail(filepath, opts){
     ],
     info: infoLines.join('<br>') || null
   });
-  if(opts.push !== false) pushHistory({type:'detail', path: filepath});
+  if(opts.push !== false) callAction('pushHistory', {type:'detail', path: filepath});
   // 书籍详情：显示本地封面 + 上传按钮
   if(it.type==='book'){
     showBookCover(it);
@@ -411,26 +411,25 @@ function initEventDelegation(){
 
     let args = [];
     try{ args = JSON.parse(el.dataset.args || '[]'); }catch(ex){ args = []; }
+    if(!Array.isArray(args)) args = [args];
 
-    // 支持复合动作 "funcA|funcB"
+    // 支持复合动作 "funcA|funcB"，各自带对应参数（args[索引] 为数组时优先）
     const actions = action.split('|');
     for(const a of actions){
       const fnName = a.trim();
       if(!fnName) continue;
-      // 支持 "history.back" 这种多级属性路径（window.history.back）
-      let fn;
+      const argIdx = actions.indexOf(a);
+      const subArgs = (argIdx >= 0 && Array.isArray(args[argIdx])) ? args[argIdx] : args;
       if(fnName.includes('.')){
+        // 支持 "history.back" 这种多级属性路径（window.history.back）
         const parts = fnName.split('.');
         let obj = window;
         for(const p of parts){ if(obj) obj = obj[p]; }
-        fn = typeof obj === 'function' ? obj : null;
+        if(typeof obj === 'function') obj(...subArgs);
       } else {
-        fn = typeof window[fnName] === 'function' ? window[fnName] : null;
-      }
-      if(fn){
-        const argIdx = actions.indexOf(a);
-        const subArgs = (argIdx >= 0 && Array.isArray(args[argIdx])) ? args[argIdx] : args;
-        fn(...subArgs);
+        // callAction 是「执行式」分发器：在其内部执行处理器并传入参数。
+        // 绝不能写成 `fn = callAction(name)` 再 `fn(...args)` —— 那会先无参执行一次，再把返回值当函数二次调用，导致 openDetail()/navigate() 丢失参数。
+        callAction(fnName, ...subArgs);
       }
     }
     // 如果元素有 href="#" 且不是真正的链接，阻止默认行为
@@ -442,9 +441,7 @@ function initEventDelegation(){
     const el = e.target.closest('[data-change]');
     if(!el) return;
     const action = el.dataset.change;
-    if(typeof window[action] === 'function'){
-      window[action](e.target.value, el);
-    }
+    callAction(action, e.target.value, el);
   });
 
   // input 事件委托
@@ -452,9 +449,7 @@ function initEventDelegation(){
     const el = e.target.closest('[data-input]');
     if(!el) return;
     const action = el.dataset.input;
-    if(typeof window[action] === 'function'){
-      window[action](e.target.value, el);
-    }
+    callAction(action, e.target.value, el);
   });
 
   // 拖拽事件委托（dragstart/dragover/dragend/drop）
@@ -469,10 +464,8 @@ function initEventDelegation(){
       if(evtType === 'drop' && el.dataset.dropArgs) rawArgs = el.dataset.dropArgs;
       let args = [];
       try{ args = JSON.parse(rawArgs); }catch(ex){ args = []; }
-      if(typeof window[action] === 'function'){
-        window[action](e, ...args);
-        e.preventDefault();
-      }
+      callAction(action, e, ...args);
+      e.preventDefault();
     });
   });
 }
