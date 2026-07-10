@@ -7,10 +7,14 @@ import json
 import time
 import traceback
 import urllib.parse
+import urllib.request
 import shutil
 import re
 import base64
 from pathlib import Path
+
+# 封面抓取缓存（单线程 HTTPServer，无需加锁）
+COVER_CACHE = {}
 
 from backend.config import VAULT_ROOT, FRONTEND_FILE, TYPE_DIR, DIR_TYPE, log, AUTH_TOKEN
 from backend.vault import (
@@ -132,6 +136,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # API: 获取单个文件
             if path == '/api/item':
                 self._handle_get_item(params)
+                return
+
+            # API: 视频封面抓取（先支持 B 站，后续扩展其他平台）
+            if path == '/api/cover':
+                self._handle_cover(params)
+                return
+
+            # API: 图片代理（同源转发，避免 canvas 跨域污染导致无法导出）
+            if path == '/api/img':
+                self._handle_img_proxy(params)
                 return
 
             # API: 附件图片服务（个人知识库 内的图片文件）
@@ -389,7 +403,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._send_json({'changed': changed})
 
     def _handle_get_item(self, params):
-        file_path = params.get('path', [''])[0]
+        file_path = urllib.parse.unquote(params.get('path', [''])[0])
         if not file_path:
             self._send_json({'error': 'Missing path'}, 400)
             return
@@ -412,6 +426,96 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                       'type': bl['type'], 'path': bl['path']})
         item['backlinks'] = backlinks
         self._send_json(item)
+
+    # ── 封面抓取 ───────────────────────────────────────
+    def _resolve_bilibili_bvid(self, url):
+        """从 B 站链接中提取 BV 号，支持 b23.tv 短链跳转"""
+        m = re.search(r'(BV[0-9A-Za-z]{10,12})', url)
+        if m:
+            return m.group(1)
+        # b23.tv 短链：跟随重定向拿真实 URL 再提取
+        if 'b23.tv' in url:
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                resp = urllib.request.urlopen(req, timeout=8)
+                real = resp.geturl()
+                m2 = re.search(r'(BV[0-9A-Za-z]{10,12})', real)
+                if m2:
+                    return m2.group(1)
+            except Exception:
+                pass
+        return None
+
+    def _fetch_bilibili_cover(self, url):
+        bvid = self._resolve_bilibili_bvid(url)
+        if not bvid:
+            return {'ok': False, 'error': '未能从链接中识别 B 站视频 BV 号'}
+        api = 'https://api.bilibili.com/x/web-interface/view?bvid=' + bvid
+        req = urllib.request.Request(api, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://www.bilibili.com/'
+        })
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read().decode('utf-8'))
+        if data.get('code') != 0:
+            return {'ok': False, 'error': 'B 站接口返回错误：' + str(data.get('message', data))}
+        d = data['data']
+        return {
+            'ok': True,
+            'platform': 'bilibili',
+            'bvid': bvid,
+            'cover': d.get('pic', ''),
+            'title': d.get('title', ''),
+            'author': d.get('owner', {}).get('name', ''),
+            'views': d.get('stat', {}).get('view', 0),
+            'source_url': url,
+        }
+
+    def _handle_cover(self, params):
+        url = urllib.parse.unquote(params.get('url', [''])[0]).strip()
+        if not url:
+            self._send_json({'error': 'Missing url'}, 400)
+            return
+        # 内存缓存，避免重复请求触发风控
+        if url in COVER_CACHE:
+            self._send_json(COVER_CACHE[url])
+            return
+        try:
+            if 'bilibili.com' in url or 'b23.tv' in url or 'BV' in url:
+                result = self._fetch_bilibili_cover(url)
+            else:
+                result = {'ok': False, 'error': '暂不支持该平台链接（当前仅支持 B 站）'}
+            if result.get('ok'):
+                COVER_CACHE[url] = result
+            self._send_json(result)
+        except Exception as e:
+            self._send_json({'ok': False, 'error': '获取封面失败：' + str(e)})
+
+    def _handle_img_proxy(self, params):
+        """同源图片代理：转发外部图片字节，供前端 canvas 裁剪导出（避免跨域污染）"""
+        url = urllib.parse.unquote(params.get('url', [''])[0]).strip()
+        if not url or not url.startswith(('http://', 'https://')):
+            self.send_error(400, 'Invalid url')
+            return
+        try:
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.bilibili.com/'
+            })
+            resp = urllib.request.urlopen(req, timeout=15)
+            ctype = resp.headers.get('Content-Type', 'image/jpeg')
+            if not ctype.startswith('image/'):
+                self.send_error(415, 'Not an image')
+                return
+            body = resp.read()
+            self.send_response(200)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Cache-Control', 'public, max-age=86400')
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as e:
+            self.send_error(502, 'Proxy error: ' + str(e))
 
     # ── POST 路由 ─────────────────────────────────────────
     def do_POST(self):
@@ -631,7 +735,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _handle_update_item(self):
         data = self._read_body()
-        file_path = data.get('path', '')
+        file_path = urllib.parse.unquote(data.get('path', ''))
         if not file_path:
             self._send_json({'error': 'Missing path'}, 400)
             return
@@ -690,7 +794,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             parsed = urllib.parse.urlparse(self.path)
             params = urllib.parse.parse_qs(parsed.query)
-            file_path = params.get('path', [''])[0]
+            file_path = urllib.parse.unquote(params.get('path', [''])[0])
             if not file_path:
                 self._send_json({'error': 'Missing path'}, 400)
                 return

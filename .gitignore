@@ -14,3 +14,4 @@ server_port.txt
 # ============ 系统异常文件 ============
 nul
 .kb_token
+kb_server.log

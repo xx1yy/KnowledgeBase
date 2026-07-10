@@ -42,6 +42,39 @@ async function renderList(type){
   const data = await get(`/items?type=${type}`);
   const filtered = data.filter(it => it.type === type);
   if(!filtered.length) return document.getElementById('content').innerHTML = `<div class="empty"><div class="big">${TYPE_MAP[type]?.icon||''}</div>还没有${TYPE_MAP[type]?.label||''}记录</div>`;
+
+  // 视频列表：每条带封面缩略图（像 B 站/YouTube 列表那样）
+  if(type==='video'){
+    const html = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:14px">
+      ${filtered.map(it=>{
+        // 从 content/url 提取 BV 号
+        const raw = (it.url||'') + '\n' + (it.content||'');
+        const bvMatch = raw.match(/(BV[0-9A-Za-z]{10,12})/);
+        const bvId = bvMatch ? bvMatch[1] : '';
+        let tags = (it.tags||[]).slice(0,3).map(t=>`<span class="tag">${ESC(t)}</span>`).join('');
+        return `<div class="panel item-card-video" style="cursor:pointer" data-action="openDetail" data-args='${JSON.stringify([it.path])}'${bvId?` data-bv="${bvId}"`:''}>
+          <div class="video-thumb-row">
+            <img class="video-thumb" src="" alt="${ESC(it.title)} 封面" referrerpolicy="no-referrer" loading="lazy">
+            <div class="video-thumb-info">
+              <div style="font-size:14px;font-weight:600;line-height:1.3;margin-bottom:4px">${ESC(it.title)}</div>
+              ${it.source?`<div style="font-size:12px;color:var(--muted)">${ESC(it.source)}</div>`:''}
+              ${(it.status)?`<span class="type-badge ${statusColor(it.status)}">${it.status}</span>`:''}
+              ${tags?`<div style="margin-top:4px">${tags}</div>`:''}
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+            ${it.rating>0?`<span class="stars">${'★'.repeat(it.rating)}${'☆'.repeat(5-it.rating)}</span>`:'<span></span>'}
+            <span style="font-size:11px;color:var(--faint)">${FMTREL(it.mtime)}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+    document.getElementById('content').innerHTML = html;
+    loadVideoThumbs(); // 异步批量填充封面
+    return;
+  }
+
   return document.getElementById('content').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${filtered.map(it=>{
@@ -64,4 +97,28 @@ async function renderList(type){
         </div>`;
       }).join('')}
     </div>`;
+}
+
+// ── 批量加载视频列表封面缩略图 ──
+async function loadVideoThumbs(){
+  // data-bv 在父级 .panel 上，从它里面找 .video-thumb
+  const cards = document.querySelectorAll('[data-bv]');
+  for(const card of cards){
+    const bv = card.dataset.bv;
+    if(!bv) continue;
+    const img = card.querySelector('.video-thumb');
+    if(!img){ img.style.display='none'; continue; }
+    // 先检查 localStorage 缓存
+    const cacheKey = 'kb_cover_' + bv;
+    try{
+      const cached = JSON.parse(localStorage.getItem(cacheKey));
+      if(cached && cached.ok && cached.cover){
+        img.src = cached.cover; continue;
+      }
+    }catch(e){}
+    // 异步请求封面（不阻塞渲染）
+    get('/cover?url=' + encodeURIComponent('https://www.bilibili.com/video/'+bv))
+      .then(d => { if(d?.ok && d.cover){ img.src = d.cover; try{localStorage.setItem(cacheKey, JSON.stringify(d));}catch(e){} } })
+      .catch(() => {});
+  }
 }
