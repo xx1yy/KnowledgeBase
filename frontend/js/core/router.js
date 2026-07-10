@@ -11,11 +11,15 @@ async function restoreNotesView(path, done){
   let view = 'book-notes';
   try{
     const it = await get('/item?path=' + encodeURIComponent(fp));
-    view = it.type === 'video-notes' ? 'video-notes' : 'book-notes';
+    if(it.type === 'video-notes') view = 'video-notes';
+    else if(it.type === 'post-notes') view = 'post-notes';
+    else view = 'book-notes';
   }catch(e){}
   if(!document.getElementById('noteReader')){
     currentNotesView = view;
-    if(view === 'video-notes'){ await renderVideoNotes(); } else { await renderBookNotes(); }
+    if(view === 'video-notes'){ await renderVideoNotes(); }
+    else if(view === 'post-notes'){ await renderPostNotes(); }
+    else { await renderBookNotes(); }
   }
   if(done) await done();
 }
@@ -57,6 +61,9 @@ async function navigate(view, opts){
   ]}); }
   else if(view === 'video-notes'){ currentNotesView = 'video-notes'; t.textContent = '视频笔记'; a.style.display='none'; renderVideoNotes(); renderRightbar({actions:[
     {label:'＋ 新建笔记', action:'showAddNoteModal', args:['video'], type:'primary'}
+  ]}); }
+  else if(view === 'post-notes'){ currentNotesView = 'post-notes'; t.textContent = '帖子笔记'; a.style.display='none'; renderPostNotes(); renderRightbar({actions:[
+    {label:'＋ 新建笔记', action:'showAddNoteModal', args:['post'], type:'primary'}
   ]}); }
   else if(view === 'tags'){ t.textContent = '标签'; a.style.display='none'; renderTags(); renderRightbar({actions:[]}); }
   else if(view === 'domains'){ t.textContent = '领域'; a.style.display='none'; renderDomains(); renderRightbar({actions:[]}); }

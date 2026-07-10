@@ -34,6 +34,7 @@ DIR_TYPE = {
     "1-收件箱": "quicknote",
     "2-输入/书籍": "book",
     "2-输入/视频": "video",
+    "2-输入/帖子": "post",
     "3-概念": "concept",
     "4-反思": "reflection",
     "5-问题": "problem",
@@ -44,16 +45,18 @@ TYPE_LABELS = {
     "book": "书籍", "video": "视频", "concept": "概念",
     "reflection": "反思", "problem": "问题", "plan": "计划",
     "quicknote": "闪念笔记", "book-notes": "文学笔记",
-    "video-notes": "视频笔记",
+    "video-notes": "视频笔记", "post-notes": "帖子笔记",
+    "post": "帖子",
 }
 
 TYPE_DIR = {
-    "book": "2-输入/书籍", "video": "2-输入/视频",
+    "book": "2-输入/书籍", "video": "2-输入/视频", "post": "2-输入/帖子",
     "concept": "3-概念", "reflection": "4-反思",
     "problem": "5-问题", "plan": "6-计划",
     "quicknote": "1-收件箱",
     "book-notes": "2-输入/书籍",
     "video-notes": "2-输入/视频",
+    "post-notes": "2-输入/帖子",
 }
 
 

@@ -152,6 +152,70 @@ updated: "{now}"
 
 - 
 """,
+        'post': f"""---
+type: post
+title: "{title}"
+source: "{data.get('source', '')}"
+url: "{data.get('url', '')}"
+platform: ""
+status: {data.get('status', '已读')}
+tags: {tag_str}
+concepts: []
+created: "{now}"
+updated: "{now}"
+---
+
+# {title}
+
+**来源**：{data.get('source', '')}
+**链接**：{data.get('url', '')}
+**平台**：
+
+## 核心内容
+
+{data.get('content', '')}
+
+## 关键观点
+
+## 提炼概念
+
+> 从本帖子提炼的概念，用 `[[3-概念/概念名]]` 链接
+
+## 我的思考
+
+---
+
+## 相关文件
+
+- 📝 [[{title}-帖子笔记]] — 逐段摘录、金句、随手笔记
+""",
+        'post-notes': f"""---
+type: post-notes
+title: "{title}"
+parent: "[[{data.get('parent', title)}]]"
+created: "{now}"
+updated: "{now}"
+---
+
+> 原始摘录、逐段内容、金句、随手笔记。
+> 枢纽页在 [[{data.get('parent', title)}]]
+
+---
+
+{data.get('content', '')}
+
+---
+
+## 金句收藏
+
+> 
+
+---
+
+## 随手笔记
+
+- 
+""",
         'concept': f"""---
 type: concept
 title: "{title}"
@@ -232,35 +296,7 @@ updated: "{now}"
 
 ## 关联行动
 """,
-        'plan': f"""---
-type: plan
-title: "{title}"
-status: {data.get('status', '待开始')}
-priority: {data.get('priority', '中')}
-progress: {data.get('progress', 0)}
-start_date: {date}
-due_date: {data.get('due_date', '')}
-tags: {tag_str}
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-**状态**：{data.get('status', '待开始')}
-**优先级**：{data.get('priority', '中')}
-**进度**：{data.get('progress', 0)}%
-
-## 为什么做
-
-## 目标
-
-{data.get('content', '')}
-
-## 执行步骤
-
-- [ ] 
-""",
+        'plan': _plan_template(data, tag_str, date, now),
         'quicknote': f"""---
 type: quicknote
 title: "{title}"
@@ -274,6 +310,88 @@ created: "{now}"
 """,
     }
     return templates.get(item_type, templates['quicknote'])
+
+
+def _plan_template(data, tag_str, date, now):
+    """根据 plan_type 生成行动模板或习惯模板"""
+    title = data.get('title', '未命名')
+    plan_type = data.get('plan_type', 'action')
+    source_concept = data.get('source_concept', '')
+
+    if plan_type == 'habit':
+        freq = data.get('frequency', 'daily')
+        return f"""---
+type: plan
+title: "{title}"
+plan_type: habit
+status: {data.get('status', '活跃')}
+frequency: {freq}
+streak: 0
+best_streak: 0
+last_checkin: ""
+source_concept: "{source_concept}"
+tags: {tag_str}
+created: "{now}"
+updated: "{now}"
+---
+
+# {title}
+
+**类型**：习惯养成 · **频率**：{freq}
+**状态**：{data.get('status', '活跃')}
+**连续天数**：0 天 · **历史最长**：0 天
+
+## 为什么养成这个习惯
+
+{data.get('content', '')}
+
+## 触发提示（环境设计）
+
+> 把习惯和行为绑定到已有的日常流程上，降低启动阻力
+
+## 奖励机制
+
+> 完成后的即时正向反馈
+
+## 打卡记录
+
+| 日期 | 备注 |
+|------|------|
+"""
+    else:
+        # action 模板（默认）
+        return f"""---
+type: plan
+title: "{title}"
+plan_type: action
+status: {data.get('status', '待开始')}
+priority: {data.get('priority', '中')}
+progress: {data.get('progress', 0)}
+start_date: {date}
+due_date: {data.get('due_date', '')}
+source_concept: "{source_concept}"
+tags: {tag_str}
+created: "{now}"
+updated: "{now}"
+---
+
+# {title}
+
+**状态**：{data.get('status', '待开始')}
+**优先级**：{data.get('priority', '中')}
+**进度**：{data.get('progress', 0)}%
+**来源概念**：{source_concept or '无'}
+
+## 为什么做
+
+## 目标
+
+{data.get('content', '')}
+
+## 执行步骤
+
+- [ ] 
+"""
 
 
 def _build_frontmatter(fm):

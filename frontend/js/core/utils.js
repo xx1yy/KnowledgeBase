@@ -6,6 +6,7 @@ const FMTREL = ts => {if(!ts)return'';const d=Date.now()-(new Date(ts)).getTime(
 const TYPES = [
   {key:'book',label:'书籍',icon:'📚',typeCls:'type-book'},
   {key:'video',label:'视频',icon:'🎬',typeCls:'type-video'},
+  {key:'post',label:'帖子',icon:'📱',typeCls:'type-post'},
   {key:'concept',label:'概念',icon:'💡',typeCls:'type-concept'},
   {key:'reflection',label:'反思',icon:'💭',typeCls:'type-reflection'},
   {key:'problem',label:'问题',icon:'❓',typeCls:'type-problem'},
@@ -15,6 +16,7 @@ const TYPES = [
 const TYPE_MAP = Object.fromEntries(TYPES.map(t=>[t.key,t]));
 TYPE_MAP['book-notes'] = {key:'book-notes',label:'文学笔记',icon:'📝',typeCls:'type-book'};
 TYPE_MAP['video-notes'] = {key:'video-notes',label:'视频笔记',icon:'📺',typeCls:'type-video'};
+TYPE_MAP['post-notes'] = {key:'post-notes',label:'帖子笔记',icon:'📱',typeCls:'type-post'};
 TYPE_MAP['quicknote'] = {key:'quicknote',label:'闪念笔记',icon:'⚡',typeCls:'type-concept'};
 
 function statusColor(s){

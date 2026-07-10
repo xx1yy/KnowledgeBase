@@ -1,4 +1,4 @@
-// Notes (book-notes & video-notes) — 笔记列表渲染、章节管理、排序、拖拽、阅读/编辑模式
+// Notes (book-notes & video-notes & post-notes) — 笔记列表渲染、章节管理、排序、拖拽、阅读/编辑模式
 let currentNotePath = null;
 let currentNoteData = null;
 let currentNotesView = null;
@@ -275,6 +275,60 @@ async function renderVideoNotes(){
   }
 }
 
+// ── 帖子笔记列表 ──
+async function renderPostNotes(){
+  let data;
+  try{ data = await get('/items?type=post-notes'); }
+  catch(e){ data = []; }
+  const notes = data.filter(it => it.type === 'post-notes');
+
+  let posts = [];
+  try{ posts = await get('/items?type=post'); }catch(e){}
+  posts = posts.filter(p => p.type === 'post');
+  window._postList = posts;
+
+  if(!notes.length){
+    document.getElementById('content').innerHTML = `<div class="empty"><div class="big">📱</div>还没有帖子笔记<br><span style="font-size:12px;color:var(--faint);margin-bottom:16px;display:block">添加帖子时会自动创建，也可以手动新建</span><button class="btn-p" data-action="showAddNoteModal" data-args='["post"]'>＋ 新建帖子笔记</button></div>`;
+    return;
+  }
+
+  const grouped = {};
+  notes.forEach(n => {
+    const parts = n.path.split('/');
+    const postFolder = parts[parts.length - 2] || '未分类';
+    if(!grouped[postFolder]) grouped[postFolder] = [];
+    grouped[postFolder].push(n);
+  });
+
+  document.getElementById('content').innerHTML = `
+    <div class="notes-layout">
+      <div class="notes-sidebar" id="notesList">
+        <button class="btn-p" style="width:100%;margin-bottom:8px;justify-content:center" data-action="showAddNoteModal" data-args='["post"]'>＋ 新建帖子笔记</button>
+        <div class="distill-summary">${notes.length}篇笔记 · ${notes.filter(n=>(n.concepts||[]).length).length}篇已提炼 · ${notes.reduce((s,n)=>s+(n.concepts||[]).length,0)}个概念</div>
+        ${Object.entries(grouped).map(([post, postNotes]) => `
+          <div class="note-group">
+            <div class="note-group-h">📱 ${ESC(post)}</div>
+            ${postNotes.map(n => {
+              const cc = (n.concepts||[]).length;
+              return `
+              <div class="note-item" id="ni-${n.path.replace(/[^a-zA-Z0-9]/g,'')}" data-action="loadNoteContent" data-args='${JSON.stringify([n.path])}'>
+                <div class="nt">${ESC(String(n.title||'').replace(/-帖子笔记$/,''))}${cc?`<span class="concept-badge">💡${cc}</span>`:''}</div>
+                <div class="nd">${FMTREL(n.mtime)}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        `).join('')}
+      </div>
+      <div class="notes-reader" id="noteReader">
+        <div class="empty"><div class="big">📱</div>选择左侧笔记开始阅读</div>
+      </div>
+    </div>`;
+
+  if(notes.length){
+    loadNoteContent(encodeURIComponent(notes[0].path), {push:false});
+  }
+}
+
 // ── 分章节栏：书籍选择 + 章节渲染 ──
 function chapterKey(s){
   const m = s.match(/\d+/);
@@ -462,14 +516,16 @@ async function loadNoteContent(filepath, opts){
   const parentName = fp.split('/').slice(-2,-1)[0] || '';
   const noteType = it.type || 'book-notes';
   const isVideo = noteType === 'video-notes';
-  const icon = isVideo ? '🎬' : '📚';
-  const badgeCls = isVideo ? 'type-video' : 'type-book';
+  const isPost = noteType === 'post-notes';
+  const isNoChapter = isVideo || isPost;
+  const icon = isVideo ? '🎬' : (isPost ? '📱' : '📚');
+  const badgeCls = isVideo ? 'type-video' : (isPost ? 'type-post' : 'type-book');
   const conceptCount = (it.concepts||[]).length;
   document.getElementById('noteReader').innerHTML = `
     <div class="note-reader-card">
       <div class="note-reader-toolbar">
         <span class="type-badge ${badgeCls}">${icon} ${ESC(parentName)}</span>
-        ${!isVideo && it.chapter ? `<span class="type-badge badge-gray">📖 ${ESC(it.chapter)}</span>` : ''}
+        ${!isNoChapter && it.chapter ? `<span class="type-badge badge-gray">📖 ${ESC(it.chapter)}</span>` : ''}
         ${conceptCount ? `<span class="concept-badge">💡 ${conceptCount}个概念</span>` : ''}
         <span style="font-size:11px;color:var(--faint);margin-left:auto">更新于 ${FMT(it.updated||it.mtime)}</span>
       </div>
@@ -483,7 +539,7 @@ async function loadNoteContent(filepath, opts){
           <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;display:block">笔记标题</label>
           <input type="text" id="noteTitleEdit" value="${ESC(it.title)}" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;font-weight:600;outline:none;box-sizing:border-box">
         </div>
-        ${!isVideo ? `<div class="field" style="margin-bottom:12px">
+        ${!isNoChapter ? `<div class="field" style="margin-bottom:12px">
           <label style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;display:block">章节（可选）</label>
           <input type="text" id="noteChapterEdit" value="${ESC(it.chapter||'')}" placeholder="如：第3章 记忆（留空归入「未分章」）" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;outline:none;box-sizing:border-box">
         </div>` : ''}
@@ -525,9 +581,11 @@ async function saveNoteContent(){
   const titleEl = document.getElementById('noteTitleEdit');
   const title = titleEl ? titleEl.value.trim() : '';
   const chapterEl = document.getElementById('noteChapterEdit');
-  const chapter = (!isVideo && chapterEl) ? chapterEl.value.trim() : '';
+  const noteType = (currentNoteData && currentNoteData.type) || 'book-notes';
+  const isNoChapter = (noteType === 'video-notes' || noteType === 'post-notes');
+  const chapter = (!isNoChapter && chapterEl) ? chapterEl.value.trim() : '';
   const data = {path: currentNotePath, content: content};
-  if(!isVideo && chapter) data.chapter = chapter;
+  if(!isNoChapter && chapter) data.chapter = chapter;
   if(title) data.title = title;
   try{
     await put('/item', data);

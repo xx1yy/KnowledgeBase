@@ -98,6 +98,10 @@ function renderNav(){
       <span class="nav-i">📺</span><span>视频笔记</span>
       <span class="nav-n">${counts['video-notes']||0}</span>
     </button>
+    <button class="nav-item ${currentView==='post-notes'?'active':''}" data-action="navigate" data-args='["post-notes"]'>
+      <span class="nav-i">📱</span><span>帖子笔记</span>
+      <span class="nav-n">${counts['post-notes']||0}</span>
+    </button>
     `;
 }
 
@@ -109,6 +113,14 @@ async function openDetail(filepath, opts){
   const t = TYPE_MAP[it.type];
   let html = `<div class="detail"><span class="detail-back" data-action="goBack" data-args='[]'>← 返回${t?.label||''}</span>`;
   html += `<div class="detail-card">`;
+  if(it.type==='book'){
+    // 书籍封面占位（异步填充，避免阻塞详情渲染）
+    html += `<div class="book-cover-wrap" id="bookCoverWrap" style="display:none"><img class="book-cover" id="bookCoverImg" alt="${ESC(it.title)} 封面" referrerpolicy="no-referrer"></div>`;
+  }
+  if(it.type==='video'){
+    // 视频封面占位（本地 cover 字段，无则显示重新获取按钮）
+    html += `<div class="book-cover-wrap" id="videoCoverWrap" style="display:none"><img class="book-cover" id="videoCoverImg" alt="${ESC(it.title)} 封面" referrerpolicy="no-referrer"></div>`;
+  }
   html += `<div class="detail-title">${ESC(it.title)}</div>`;
   html += `<div class="detail-meta">`;
   if(t) html += `<span class="type-badge ${t.typeCls}">${t.icon} ${t.label}</span>`;
@@ -142,6 +154,13 @@ async function openDetail(filepath, opts){
       html += `<div class="detail-section"><h4>📺 视频笔记</h4><div class="detail-links">${notes.map(n=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}'>📄 ${ESC(n.title)}</a>`).join(' · ')}</div></div>`;
     }
   }
+  if(it.type==='post'){
+    const allPosts = await get(`/items?type=post`);
+    const notes = allPosts.filter(p => p.type==='post-notes' && p.path.startsWith(it.path.replace(/[^/]+\.md$/,'')));
+    if(notes.length){
+      html += `<div class="detail-section"><h4>📱 帖子笔记</h4><div class="detail-links">${notes.map(n=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}'>📄 ${ESC(n.title)}</a>`).join(' · ')}</div></div>`;
+    }
+  }
   html += `<div class="detail-section"><h4>链接</h4><div class="detail-links">${(it.links||[]).map(l=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([l+".md"])}'>[[${ESC(l)}]]</a>`).join(' · ')||'无'}</div></div>`;
   if(it.backlinks&&it.backlinks.length) html += `<div class="detail-section"><h4>被以下引用</h4><div class="detail-links">${it.backlinks.map(bl=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([bl.path])}'>← ${ESC(bl.title)} (${TYPE_MAP[bl.type]?.label||bl.type})</a>`).join(' · ')}</div></div>`;
   html += `<div class="detail-meta" style="font-size:11px;color:var(--faint)">创建于 ${FMT(it.created)} · 更新于 ${FMT(it.updated)} · 文件: ${it.path}</div>`;
@@ -168,6 +187,81 @@ async function openDetail(filepath, opts){
     info: infoLines.join('<br>') || null
   });
   if(opts.push !== false) pushHistory({type:'detail', path: filepath});
+  // 书籍详情：显示本地封面 + 上传按钮
+  if(it.type==='book'){
+    showBookCover(it);
+  }
+  // 视频详情：显示本地封面 + 上传/重新获取按钮
+  if(it.type==='video'){
+    showVideoCover(it);
+  }
+}
+
+// ── 书籍封面显示 + 上传（详情页） ──
+function showBookCover(it){
+  const wrap = document.getElementById('bookCoverWrap');
+  const img = document.getElementById('bookCoverImg');
+  if(!wrap || !img) return;
+  const coverUrl = it.cover || '';
+  if(coverUrl){
+    img.src = coverUrl;
+    wrap.style.display = 'block';
+  }
+  // 在封面区域添加上传按钮
+  const uploadBtn = document.createElement('button');
+  uploadBtn.className = 'btn-g sm';
+  uploadBtn.textContent = '📁 更换封面';
+  uploadBtn.style.cssText = 'margin-top:8px;font-size:12px';
+  uploadBtn.setAttribute('data-action', 'uploadCover');
+  uploadBtn.setAttribute('data-args', JSON.stringify([it.path]));
+  wrap.appendChild(uploadBtn);
+}
+
+// ── 视频封面显示 + 上传/重新获取（详情页） ──
+function showVideoCover(it){
+  const wrap = document.getElementById('videoCoverWrap');
+  const img = document.getElementById('videoCoverImg');
+  if(!wrap || !img) return;
+  const coverUrl = it.cover || '';
+  if(coverUrl){
+    img.src = coverUrl;
+    wrap.style.display = 'block';
+  }
+  // 上传封面按钮
+  const uploadBtn = document.createElement('button');
+  uploadBtn.className = 'btn-g sm';
+  uploadBtn.textContent = '📁 更换封面';
+  uploadBtn.style.cssText = 'margin-top:8px;font-size:12px;margin-right:6px';
+  uploadBtn.setAttribute('data-action', 'uploadCover');
+  uploadBtn.setAttribute('data-args', JSON.stringify([it.path]));
+  wrap.appendChild(uploadBtn);
+  // 重新从 B 站获取封面按钮（本地无封面或想刷新时）
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'btn-g sm';
+  refreshBtn.textContent = '🔄 重新获取';
+  refreshBtn.style.cssText = 'margin-top:8px;font-size:12px';
+  refreshBtn.onclick = async function(){
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = '获取中…';
+    try{
+      const r = await post('/video-cover-refresh', {path: it.path});
+      if(r.ok && r.cover){
+        img.src = r.cover;
+        wrap.style.display = 'block';
+        it.cover = r.cover;
+      } else if(r.ok && !r.cover){
+        alert('未找到 B 站封面（链接可能无效或外网不可达）。可改用手动上传。');
+      } else {
+        alert(r.error || '获取失败');
+      }
+    }catch(e){
+      alert('获取失败：' + e.message);
+    }finally{
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = '🔄 重新获取';
+    }
+  };
+  wrap.appendChild(refreshBtn);
 }
 
 // 搜索

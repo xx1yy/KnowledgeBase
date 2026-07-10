@@ -13,7 +13,15 @@ async function openEdit(filepath){
   const it = await get(`/item?path=${encodeURIComponent(fp)}`);
   const html = `<div class="modal-head"><h3>编辑 ${ESC(it.title)}</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
   <div class="modal-body">
-    <div class="field"><label>状态</label><select id="f_status">${makeOptions({book:['想读','在读','已读'],video:['想看','已看'],problem:['待解决','解决中','已解决'],plan:['待开始','进行中','已完成'],reflection:['']},it.type,it.status)}</select></div>
+    ${it.type==='plan'?`
+    <div class="field"><label>计划类型</label><select id="f_plan_type">${['action','habit'].map(pt=>`<option value="${pt}" ${pt===(it.plan_type||'action')?'selected':''}>${pt==='action'?'普通行动':'习惯养成'}</option>`).join('')}</select></div>
+    <div id="plan_habit_fields" style="${(it.plan_type||'action')!=='habits'?'display:none':''}">
+      <div class="field"><label>频率</label><select id="f_frequency">${['daily','weekly','weekday','custom'].map(f=>`<option value="${f}" ${f===(it.frequency||'daily')?'selected':''}>${{daily:'每天',weekly:'每周',weekday:'工作日',custom:'自定义'}[f]}</option>`).join('')}</select></div>
+      <div class="field"><label>连续天数</label><input type="number" id="f_streak" value="${it.streak||0}" min="0" style="width:80px"> <span style="font-size:12px;color:var(--muted)">历史最长：<span id="best_streak_display">${it.best_streak||0}</span> 天</span></div>
+    </div>
+    <div class="field"><label>来源概念</label><input type="text" id="f_source_concept" value="${ESC(it.source_concept||'')}" placeholder="如 [[3-概念/环境设计]] 或 MOC名称"></div>
+    `:''}
+    <div class="field"><label>状态</label><select id="f_status">${makeOptions({book:['想读','在读','已读'],video:['想看','已看'],problem:['待解决','解决中','已解决'],plan:(it.plan_type==='habit'?['活跃','暂停','已放弃']:['待开始','进行中','已完成']),reflection:['']},it.type,it.status)}</select></div>
     ${it.type==='book'||it.type==='video'?`<div class="field"><label>评分</label><select id="f_rating">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${n===it.rating?'selected':''}>${'★'.repeat(n)}${'☆'.repeat(5-n)}</option>`).join('')}</select></div>`:''}
     ${it.type==='problem'||it.type==='plan'?`<div class="field"><label>优先级</label><select id="f_priority">${['高','中','低'].map(p=>`<option ${p===it.priority?'selected':''}>${p}</option>`).join('')}</select></div>`:''}
     ${it.type==='reflection'?`<div class="field"><label>心情</label><select id="f_mood">${['😊 开心','😌 平静','😐 一般','😔 低落','😣 痛苦'].map(m=>`<option ${m===it.mood?'selected':''}>${m}</option>`).join('')}</select></div>`:''}
@@ -23,6 +31,23 @@ async function openEdit(filepath){
   <div class="modal-foot"><button class="btn-g" data-action="closeModal" data-args='[]'>取消</button><button class="btn-p" data-action="saveEdit" data-args='${JSON.stringify([filepath])}'>保存</button></div>`;
   document.getElementById('modal').innerHTML = html;
   document.getElementById('modalMask').classList.add('show');
+  // plan 类型切换：显示/隐藏 habit 专属字段 + 切换 status 选项
+  const ptSel = document.getElementById('f_plan_type');
+  if(ptSel){
+    ptSel.addEventListener('change', function(){
+      const isHabit = this.value === 'habit';
+      const hf = document.getElementById('plan_habit_fields');
+      if(hf) hf.style.display = isHabit ? '' : 'none';
+      // 切换 status 选项
+      const stSel = document.getElementById('f_status');
+      if(stSel){
+        const opts = isHabit
+          ? ['活跃','暂停','已放弃']
+          : ['待开始','进行中','已完成'];
+        stSel.innerHTML = opts.map(o=>`<option value="${o}">${o}</option>`).join('');
+      }
+    });
+  }
 }
 
 async function saveEdit(filepath){
@@ -32,6 +57,15 @@ async function saveEdit(filepath){
     const el = document.getElementById('f_'+k);
     if(el){ data[k] = k==='rating' ? parseInt(el.value) : el.value; }
   });
+  // plan 专属字段
+  const ptEl = document.getElementById('f_plan_type');
+  if(ptEl) data.plan_type = ptEl.value;
+  const freqEl = document.getElementById('f_frequency');
+  if(freqEl) data.frequency = freqEl.value;
+  const streakEl = document.getElementById('f_streak');
+  if(streakEl) data.streak = parseInt(streakEl.value)||0;
+  const scEl = document.getElementById('f_source_concept');
+  if(scEl) data.source_concept = scEl.value.trim();
   const contentEl = document.getElementById('f_content');
   if(contentEl) data.content = contentEl.value;
   const domainEl = document.getElementById('f_domain');
@@ -47,7 +81,7 @@ async function saveEdit(filepath){
 // ── 快速记录弹窗 ──
 function openQuickCapture(preselectType){
   const types = [
-    {k:'book',l:'书籍',i:'📚'},{k:'video',l:'视频',i:'🎬'},
+    {k:'book',l:'书籍',i:'📚'},{k:'video',l:'视频',i:'🎬'},{k:'post',l:'帖子',i:'📱'},
     {k:'concept',l:'概念',i:'💡'},{k:'reflection',l:'反思',i:'💭'},
     {k:'problem',l:'问题',i:'❓'},{k:'plan',l:'计划',i:'🎯'},
   ];
@@ -62,6 +96,12 @@ function openQuickCapture(preselectType){
       <div class="field" id="qc_author_f" style="display:none"><label>作者 / 来源</label><input type="text" id="qc_author" placeholder="作者或来源"></div>
       <div class="field" id="qc_domain_f" style="display:none"><label>领域</label><input type="text" id="qc_domain" placeholder="如：学习方法，认知心理学"></div>
       <div class="field" id="qc_source_f" style="display:none"><label>来源引用 [[链接]]</label><input type="text" id="qc_source_ref" placeholder="如 [[2-输入/书籍/《书名》]]"></div>
+      <div class="field" id="qc_plan_f" style="display:none">
+        <label>计划类型</label><select id="qc_plan_type">
+          <option value="action">普通行动（一次性任务）</option>
+          <option value="habit">习惯养成（重复追踪）</option>
+        </select>
+      </div>
       <div class="field"><label>内容</label><textarea id="qc_content" placeholder="记下你想记的…" rows="5"></textarea></div>
       <div class="field"><label>标签</label><input type="text" id="qc_tags" placeholder="如：学习方法, 认知科学"></div>
     </div>
@@ -73,9 +113,10 @@ function openQuickCapture(preselectType){
 
 function updateQCFields(){
   const t = document.getElementById('qc_type').value;
-  document.getElementById('qc_author_f').style.display = (t==='book'||t==='video')?'block':'none';
+  document.getElementById('qc_author_f').style.display = (t==='book'||t==='video'||t==='post')?'block':'none';
   document.getElementById('qc_domain_f').style.display = (t==='concept'||t==='problem')?'block':'none';
   document.getElementById('qc_source_f').style.display = (t==='concept'||t==='problem'||t==='plan')?'block':'none';
+  document.getElementById('qc_plan_f').style.display = (t==='plan')?'block':'none';
 }
 
 async function saveQuickCapture(){
@@ -83,8 +124,12 @@ async function saveQuickCapture(){
   const title = document.getElementById('qc_title').value.trim();
   if(!title) return alert('请输入标题');
   const data = {type:t, title};
-  if(t==='book'||t==='video') data[t==='book'?'author':'source'] = document.getElementById('qc_author').value.trim();
+  if(t==='book'||t==='video'||t==='post') data[t==='book'?'author':'source'] = document.getElementById('qc_author').value.trim();
   if(t==='concept'||t==='problem') data.domain = document.getElementById('qc_domain').value.trim();
+  if(t==='plan'){
+    const ptSel = document.getElementById('qc_plan_type');
+    if(ptSel) data.plan_type = ptSel.value;
+  }
   const srcRef = document.getElementById('qc_source_ref').value.trim();
   let content = document.getElementById('qc_content').value.trim();
   if(srcRef) content = srcRef + '\n\n' + content;
@@ -118,6 +163,17 @@ const NOTE_MODAL_CONFIG = {
     emptyMsg: '还没有视频笔记',
     hint: '添加视频时会自动创建，也可以手动新建',
     suffix: '-视频笔记', hasChapter: false,
+    changeHandler: 'onNoteParentChange', inputHandler: 'autoFillNoteTitle',
+    selectId: 'noteParentSelect', inputId: 'noteParentInput',
+    listId: null, chapterId: null,
+  },
+  post: {
+    icon: '📱', label: '帖子笔记',
+    parentType: 'post', parentLabel: '关联帖子',
+    parentKey: '_postList', notesKey: null,
+    emptyMsg: '还没有帖子笔记',
+    hint: '添加帖子时会自动创建，也可以手动新建',
+    suffix: '-帖子笔记', hasChapter: false,
     changeHandler: 'onNoteParentChange', inputHandler: 'autoFillNoteTitle',
     selectId: 'noteParentSelect', inputId: 'noteParentInput',
     listId: null, chapterId: null,
@@ -275,6 +331,8 @@ async function saveNewNote(noteType){
     // 重新渲染列表（拿到最新数据），随后直接打开刚创建的笔记，而不是跳到第一本第一个
     if(noteType === 'video'){
       await renderVideoNotes();
+    } else if(noteType === 'post'){
+      await renderPostNotes();
     } else {
       await renderBookNotes();
     }

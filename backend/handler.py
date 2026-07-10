@@ -87,8 +87,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send_json({'token': AUTH_TOKEN})
                 return
 
-            # API 路由需要认证
-            if path.startswith('/api/') and not self._check_auth():
+            # API 路由需要认证（附件图片 /api/file/ 例外：浏览器 <img> 请求无法携带 token，且 _serve_file 已做目录穿越防护）
+            if path.startswith('/api/') and not path.startswith('/api/file/') and not self._check_auth():
                 self.send_error(401, 'Unauthorized')
                 return
 
@@ -141,6 +141,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # API: 视频封面抓取（先支持 B 站，后续扩展其他平台）
             if path == '/api/cover':
                 self._handle_cover(params)
+                return
+
+            # API: 书籍封面（已改为本地上传，此路由保留兼容但返回空）
+            if path == '/api/book-cover':
+                self._send_json({'ok': False, 'error': '请使用本地上传功能'})
                 return
 
             # API: 图片代理（同源转发，避免 canvas 跨域污染导致无法导出）
@@ -247,6 +252,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         hub_files.append(f)
                 files = hub_files
                 counts['video-notes'] = note_count
+            # 帖子目录下，只统计枢纽页（type=post），帖子笔记不单独计数
+            if t == 'post':
+                hub_files = []
+                note_count = 0
+                for f in files:
+                    try:
+                        fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
+                        ftype = fm.get('type', 'post')
+                        if ftype == 'post':
+                            hub_files.append(f)
+                        elif ftype == 'post-notes':
+                            note_count += 1
+                    except Exception:
+                        hub_files.append(f)
+                files = hub_files
+                counts['post-notes'] = note_count
             counts[t] = len(files)
             for f in files:
                 try:
@@ -447,29 +468,81 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return None
 
     def _fetch_bilibili_cover(self, url):
-        bvid = self._resolve_bilibili_bvid(url)
-        if not bvid:
-            return {'ok': False, 'error': '未能从链接中识别 B 站视频 BV 号'}
-        api = 'https://api.bilibili.com/x/web-interface/view?bvid=' + bvid
-        req = urllib.request.Request(api, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': 'https://www.bilibili.com/'
-        })
-        resp = urllib.request.urlopen(req, timeout=10)
-        data = json.loads(resp.read().decode('utf-8'))
-        if data.get('code') != 0:
-            return {'ok': False, 'error': 'B 站接口返回错误：' + str(data.get('message', data))}
-        d = data['data']
-        return {
-            'ok': True,
-            'platform': 'bilibili',
-            'bvid': bvid,
-            'cover': d.get('pic', ''),
-            'title': d.get('title', ''),
-            'author': d.get('owner', {}).get('name', ''),
-            'views': d.get('stat', {}).get('view', 0),
-            'source_url': url,
-        }
+        try:
+            bvid = self._resolve_bilibili_bvid(url)
+            if not bvid:
+                return {'ok': False, 'error': '未能从链接中识别 B 站视频 BV 号'}
+            api = 'https://api.bilibili.com/x/web-interface/view?bvid=' + bvid
+            req = urllib.request.Request(api, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.bilibili.com/'
+            })
+            resp = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(resp.read().decode('utf-8'))
+            if data.get('code') != 0:
+                return {'ok': False, 'error': 'B 站接口返回错误：' + str(data.get('message', data))}
+            d = data['data']
+            return {
+                'ok': True,
+                'platform': 'bilibili',
+                'bvid': bvid,
+                'cover': d.get('pic', ''),
+                'title': d.get('title', ''),
+                'author': d.get('owner', {}).get('name', ''),
+                'views': d.get('stat', {}).get('view', 0),
+                'source_url': url,
+            }
+        except Exception as e:
+            return {'ok': False, 'error': 'B站请求失败: ' + str(e)}
+
+    def _embed_bilibili_cover_datauri(self, filepath):
+        """读取视频文件，抓取 B 站封面 → 下载图片 → 转 data URI 写入 frontmatter 的 cover 字段。
+        这样封面只在外网可用时抓取一次，之后全部从本地文件读取，彻底避免每次查看都请求外网导致的渲染失败。
+        BV 号优先从本文件 url+正文提取；找不到时扫描同目录（视频笔记子文件，B 站链接常粘贴于此）里的链接。"""
+        try:
+            text = filepath.read_text(encoding='utf-8')
+            fm, body, _ = parse_frontmatter(text)
+            merged = (fm.get('url', '') or '') + '\n' + (body or '')
+            bvid = self._resolve_bilibili_bvid(merged)
+            # 本文件没找到 → 扫描同目录其他 .md（如「xxx-视频笔记.md」）
+            if not bvid:
+                try:
+                    for sib in filepath.parent.glob('*.md'):
+                        if sib == filepath:
+                            continue
+                        bv2 = self._resolve_bilibili_bvid(sib.read_text(encoding='utf-8', errors='ignore'))
+                        if bv2:
+                            bvid = bv2
+                            break
+                except Exception:
+                    pass
+            if not bvid:
+                return
+            api = 'https://api.bilibili.com/x/web-interface/view?bvid=' + bvid
+            req = urllib.request.Request(api, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.bilibili.com/'
+            })
+            resp = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(resp.read().decode('utf-8'))
+            if data.get('code') != 0:
+                return
+            pic_url = data['data'].get('pic', '')
+            if not pic_url:
+                return
+            img_req = urllib.request.Request(pic_url, headers={
+                'User-Agent': 'Mozilla/5.0',
+                'Referer': 'https://www.bilibili.com/'
+            })
+            img_data = urllib.request.urlopen(img_req, timeout=10).read()
+            mime = 'image/png' if img_data[:8] == b'\x89PNG\r\n\x1a\n' else 'image/jpeg'
+            b64 = base64.b64encode(img_data).decode('ascii')
+            data_uri = 'data:%s;base64,%s' % (mime, b64)
+            fm['cover'] = data_uri
+            fm['updated'] = time.strftime('%Y-%m-%d %H:%M')
+            filepath.write_text('---\n' + _build_frontmatter(fm) + '\n---\n' + body, encoding='utf-8')
+        except Exception:
+            pass
 
     def _handle_cover(self, params):
         url = urllib.parse.unquote(params.get('url', [''])[0]).strip()
@@ -491,31 +564,119 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self._send_json({'ok': False, 'error': '获取封面失败：' + str(e)})
 
+    # ── 书籍封面上传（存为 base64 data URI 到 frontmatter） ──
+    def _handle_book_cover_upload(self):
+        length = int(self.headers.get('Content-Length', 0))
+        if length == 0:
+            self._send_json({'error': 'Empty body'}, 400)
+            return
+        try:
+            raw = self.rfile.read(length)
+            data = json.loads(raw.decode('utf-8'))
+        except Exception:
+            self._send_json({'error': 'Bad JSON'}, 400)
+            return
+        book_path = (data.get('path') or '').strip()
+        content = data.get('content') or ''
+        if not book_path or not content:
+            self._send_json({'error': 'Missing path or content'}, 400)
+            return
+        # 兼容 data:image/png;base64,xxxx 与纯 base64
+        if ',' in content:
+            b64_part = content.split(',', 1)[1]
+            mime_prefix = content.split(',', 1)[0]  # e.g. "data:image/png;base64"
+        else:
+            b64_part = content
+            mime_prefix = 'data:image/jpeg;base64'
+        try:
+            raw_bytes = base64.b64decode(b64_part)
+        except Exception:
+            self._send_json({'error': 'Invalid base64'}, 400)
+            return
+        if len(raw_bytes) > 2 * 1024 * 1024:  # 解码后不超过 2MB
+            self._send_json({'error': '图片太大（最大2MB）'}, 400)
+            return
+        fp = VAULT_ROOT / book_path
+        if not fp.exists():
+            self._send_json({'error': 'Book file not found'}, 404)
+            return
+        # 直接把完整 data URI 写入 frontmatter 的 cover 字段
+        data_uri = mime_prefix + ',' + b64_part
+        try:
+            old_text = fp.read_text(encoding='utf-8')
+            fm, body_content, _ = parse_frontmatter(old_text)
+            fm['cover'] = data_uri
+            fm['updated'] = time.strftime('%Y-%m-%d %H:%M')
+            new_fm_str = _build_frontmatter(fm)
+            new_text = f'---\n{new_fm_str}\n---\n{body_content}'
+            fp.write_text(new_text, encoding='utf-8')
+        except Exception as e:
+            self._send_json({'error': '写入文件失败: ' + str(e)}, 500)
+            return
+        self._send_json({
+            'ok': True,
+            'size': len(raw_bytes),
+            'message': '封面已保存',
+        }, 201)
+
+    def _handle_video_cover_refresh(self):
+        """为已有视频重新抓取 B 站封面并本地化（写入 cover 字段），返回最新 cover"""
+        data = self._read_body()
+        fp = (data.get('path') or '').strip()
+        if not fp:
+            self._send_json({'error': 'Missing path'}, 400)
+            return
+        filepath = VAULT_ROOT / fp
+        if not filepath.exists() or not filepath.is_file():
+            self._send_json({'error': 'File not found'}, 404)
+            return
+        self._embed_bilibili_cover_datauri(filepath)
+        try:
+            fm, _, _ = parse_frontmatter(filepath.read_text(encoding='utf-8'))
+        except Exception:
+            fm = {}
+        self._send_json({'ok': True, 'cover': fm.get('cover', '')})
+
     def _handle_img_proxy(self, params):
         """同源图片代理：转发外部图片字节，供前端 canvas 裁剪导出（避免跨域污染）"""
         url = urllib.parse.unquote(params.get('url', [''])[0]).strip()
         if not url or not url.startswith(('http://', 'https://')):
             self.send_error(400, 'Invalid url')
             return
+        body = b''
+        ctype = 'image/jpeg'
         try:
+            host = urllib.parse.urlparse(url).netloc.lower()
+            if 'bilibili' in host or 'hdslb' in host:
+                referer = 'https://www.bilibili.com/'
+            elif 'douban' in host:
+                referer = 'https://book.douban.com/'
+            else:
+                referer = f"{urllib.parse.urlparse(url).scheme}://{host}/"
             req = urllib.request.Request(url, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.bilibili.com/'
+                'Referer': referer
             })
-            resp = urllib.request.urlopen(req, timeout=15)
+            resp = urllib.request.urlopen(req, timeout=10)
             ctype = resp.headers.get('Content-Type', 'image/jpeg')
             if not ctype.startswith('image/'):
                 self.send_error(415, 'Not an image')
                 return
             body = resp.read()
+        except Exception as e:
+            # 图片代理失败返回 1x1 透明 GIF 占位图，绝不抛异常崩掉服务
+            body = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+            ctype = 'image/gif'
+        # 写入响应（独立 try 防止 wfile 已关闭时崩溃）
+        try:
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             self.send_header('Content-Length', str(len(body)))
             self.send_header('Cache-Control', 'public, max-age=86400')
             self.end_headers()
             self.wfile.write(body)
-        except Exception as e:
-            self.send_error(502, 'Proxy error: ' + str(e))
+        except Exception:
+            pass  # 连接已断开，静默忽略
 
     # ── POST 路由 ─────────────────────────────────────────
     def do_POST(self):
@@ -530,6 +691,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             if path == '/api/upload':
                 self._handle_upload()
+                return
+            if path == '/api/habit-checkin':
+                self._handle_habit_checkin()
+                return
+            if path == '/api/book-cover-upload':
+                self._handle_book_cover_upload()
+                return
+            if path == '/api/video-cover-refresh':
+                self._handle_video_cover_refresh()
                 return
             self.send_error(404)
         except Exception as e:
@@ -588,6 +758,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 notes_md = generate_md('video-notes', note_data)
                 notes_path.write_text(notes_md, encoding='utf-8')
 
+            # 自动抓取并本地化 B 站封面（仅在外网可达时；失败则留空，后续可手动上传/重新获取）
+            self._embed_bilibili_cover_datauri(filepath)
+
         # 文学笔记独立创建：放入指定书籍的子文件夹
         elif item_type == 'book-notes':
             parent_book = data.get('parent', '')
@@ -620,6 +793,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if filepath.exists():
                 fname = f"{sanitize_filename(note_title)}_{int(time.time())}.md"
                 filepath = video_dir / fname
+            filepath.write_text(md_text, encoding='utf-8')
+
+        # 帖子特殊处理：创建子文件夹 + 自动生成帖子笔记
+        elif item_type == 'post':
+            post_title = sanitize_filename(data.get('title', '未命名'))
+            post_dir = target_dir / post_title
+            post_dir.mkdir(parents=True, exist_ok=True)
+            filepath = post_dir / f'{post_title}.md'
+            if filepath.exists():
+                filepath = post_dir / f'{post_title}_{int(time.time())}.md'
+            filepath.write_text(md_text, encoding='utf-8')
+
+            # 自动创建帖子笔记文件
+            notes_path = post_dir / f'{post_title}-帖子笔记.md'
+            if not notes_path.exists():
+                note_data = dict(data)
+                note_data['title'] = f'{post_title}-帖子笔记'
+                note_data['parent'] = post_title
+                notes_md = generate_md('post-notes', note_data)
+                notes_path.write_text(notes_md, encoding='utf-8')
+
+        # 帖子笔记独立创建：放入指定帖子的子文件夹
+        elif item_type == 'post-notes':
+            parent_post = data.get('parent', '')
+            note_title = data.get('title', '未命名笔记')
+            if parent_post:
+                post_dir_name = sanitize_filename(parent_post)
+                post_dir = target_dir / post_dir_name
+                post_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                post_dir = target_dir
+            fname = sanitize_filename(note_title) + '.md'
+            filepath = post_dir / fname
+            if filepath.exists():
+                fname = f"{sanitize_filename(note_title)}_{int(time.time())}.md"
+                filepath = post_dir / fname
             filepath.write_text(md_text, encoding='utf-8')
         else:
             filepath = target_dir / fname
@@ -711,6 +920,50 @@ class Handler(http.server.BaseHTTPRequestHandler):
         rel = f"附件/{name}"
         self._send_json({'url': '/api/file/' + urllib.parse.quote(rel), 'path': rel}, 201)
 
+    # ── 习惯打卡 ────────────────────────────────────────
+    def _handle_habit_checkin(self):
+        data = self._read_body()
+        file_path = urllib.parse.unquote(data.get('path', ''))
+        if not file_path:
+            return self._send_json({'error': 'Missing path'}, 400)
+        fp = VAULT_ROOT / file_path
+        if not fp.exists():
+            return self._send_json({'error': 'File not found'}, 404)
+        old_text = fp.read_text(encoding='utf-8')
+        fm, content, raw_fm = parse_frontmatter(old_text)
+        if fm.get('type') != 'plan' or fm.get('plan_type') != 'habit':
+            return self._send_json({'error': 'Not a habit item'}, 400)
+        today = time.strftime('%Y-%m-%d')
+        last_checkin = fm.get('last_checkin', '')
+        if last_checkin == today:
+            return self._send_json({'ok': True, 'message': '今日已打卡', 'streak': fm.get('streak', 0), 'best_streak': fm.get('best_streak', 0)})
+        streak = int(fm.get('streak', 0) or 0) + 1
+        best_streak = max(streak, int(fm.get('best_streak', 0) or 0))
+        now = time.strftime('%Y-%m-%d %H:%M')
+        fm['streak'] = streak
+        fm['best_streak'] = best_streak
+        fm['last_checkin'] = today
+        fm['updated'] = now
+        new_fm_str = _build_frontmatter(fm)
+        # 用正则定位第二个 --- 的结束位置（m.end()），确保不截断正文
+        import re as _re
+        _fm_match = _re.match(r'^---\s*\n.*?\n---', old_text, _re.DOTALL)
+        if _fm_match:
+            body_start = _fm_match.end()
+            rest = old_text[body_start:].lstrip('\n')
+        else:
+            rest = content or ''
+        new_text = new_fm_str + '\n---\n' + (rest or '')
+        # 更新打卡记录表（追加到正文末尾的表格中）
+        checkin_row = f"\n| {today} | 打卡 |"
+        if '| 日期 |' in new_text:
+            new_text = new_text.rstrip() + checkin_row
+        try:
+            fp.write_text(new_text, encoding='utf-8')
+            self._send_json({'ok': True, 'streak': streak, 'best_streak': best_streak, 'last_checkin': today})
+        except Exception as e:
+            self._send_json({'error': 'Write failed: ' + str(e)}, 500)
+
     # ── PUT 路由 ──────────────────────────────────────────
     def do_PUT(self):
         try:
@@ -748,7 +1001,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         updatable = ['status', 'priority', 'rating', 'progress',
                      'mood', 'finish_date', 'watch_date', 'due_date',
                      'tags', 'title', 'author', 'source', 'url', 'domain',
-                     'concepts', 'chapter', 'order', 'definition', 'how_to_use', 'excerpt']
+                     'concepts', 'chapter', 'order', 'definition', 'how_to_use', 'excerpt',
+                     'plan_type', 'frequency', 'streak', 'best_streak', 'last_checkin', 'source_concept',
+                     'cover']
 
         # 概念：结构化字段以正文为唯一来源，重写正文而不是塞进 frontmatter
         if fm.get('type') == 'concept':
