@@ -60,7 +60,14 @@
 <script src="js/views/graph.js"></script>
 <script src="js/views/tags.js"></script>
 <script src="js/views/domains.js"></script>
-<!-- App: 入口（导航/搜索/事件委托/初始化） -->
+<!-- Layout & Views: 从 app.js 拆分出的独立职责模块（须在 app.js / actions.js 之前加载） -->
+<script src="js/layout/sidebar.js"></script>
+<script src="js/layout/rightbar.js"></script>
+<script src="js/layout/resizer.js"></script>
+<script src="js/views/detail.js"></script>
+<script src="js/views/search.js"></script>
+<script src="js/core/event-delegation.js"></script>
+<!-- App: 入口（仅启动初始化 init） -->
 <script src="js/app.js"></script>
 <!-- Actions: 显式动作注册表 + 分发器（必须最后加载，供 app.js / router.js 解耦调用） -->
 <script src="js/core/actions.js"></script>
