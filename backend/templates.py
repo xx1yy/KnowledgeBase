@@ -1,14 +1,65 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Markdown 模板生成"""
+"""Markdown 模板生成
+
+模板正文已外置到 backend/templates/*.md（占位符用 {{key}}），
+本模块负责加载、缓存与占位符替换。generate_md / concept_display_body /
+_build_frontmatter 的对外签名保持不变。
+"""
 
 import json
 import re
 import time
+from pathlib import Path
+
+_TEMPLATES_DIR = Path(__file__).parent / 'templates'
+
+# 每种模板（按文件名）在占位符缺失时使用的默认值，
+# 与原文 f-string 中 data.get(key, default) 保持一致。
+_TEMPLATE_DEFAULTS = {
+    'book': {'status': '在读', 'rating': 0, 'author': ''},
+    'book-notes': {'chapter': '', 'content': ''},
+    'video': {'status': '已看', 'rating': 0, 'source': '', 'url': '', 'content': ''},
+    'video-notes': {'content': ''},
+    'post': {'status': '已读', 'source': '', 'url': '', 'platform': '', 'content': ''},
+    'post-notes': {'content': ''},
+    'concept': {'domain': '', 'source': '', 'definition': '一句话定义',
+                'excerpt': '', 'how_to_use': '', 'content': ''},
+    'reflection': {'mood': '😌 平静', 'content': ''},
+    'problem': {'status': '待解决', 'priority': '中', 'domain': '', 'content': ''},
+    'plan-action': {'status': '待开始', 'priority': '中', 'progress': 0,
+                    'due_date': '', 'source_concept': ''},
+    'plan-habit': {'status': '活跃', 'frequency': 'daily', 'source_concept': ''},
+    'quicknote': {'content': ''},
+}
+
+_template_cache = {}
+
+_PLACEHOLDER_RE = re.compile(r'\{\{(\w+)\}\}')
+
+
+def _load_template(name):
+    """加载并缓存模板文件；缺失时抛出清晰错误（fail-fast）"""
+    if name not in _template_cache:
+        p = _TEMPLATES_DIR / f'{name}.md'
+        if not p.exists():
+            raise FileNotFoundError(
+                f'模板文件缺失：{p}（请确认 backend/templates/ 下存在 {name}.md）'
+            )
+        _template_cache[name] = p.read_text(encoding='utf-8')
+    return _template_cache[name]
+
+
+def _substitute(tpl, ctx):
+    """将 {{key}} 替换为 ctx 中对应值；未提供则为空串。
+
+    不使用 str.format，避免用户内容中的花括号（如代码片段）导致异常。
+    """
+    return _PLACEHOLDER_RE.sub(lambda m: str(ctx.get(m.group(1), '')), tpl)
 
 
 def generate_md(item_type, data):
-    """根据类型和表单数据生成 Markdown 内容"""
+    """根据类型和表单数据生成 Markdown 内容（模板来自 backend/templates/*.md）"""
     now = time.strftime('%Y-%m-%d %H:%M')
     date = time.strftime('%Y-%m-%d')
     title = data.get('title', '未命名')
@@ -17,381 +68,40 @@ def generate_md(item_type, data):
         tags = [t.strip() for t in re.split(r'[,，、]', tags) if t.strip()]
     tag_str = json.dumps(tags, ensure_ascii=False) if tags else '[]'
 
-    templates = {
-        'book': f"""---
-type: book
-title: "{title}"
-author: "{data.get('author', '')}"
-status: {data.get('status', '在读')}
-rating: {data.get('rating', 0)}
-start_date: {date}
-finish_date: ""
-tags: {tag_str}
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-**作者**：{data.get('author', '')}
-**状态**：{data.get('status', '在读')}
-**开始于**：{date}
-
----
-
-## 全书总结
-
-（读完本书后填写：这本书讲了什么？核心论点是什么？）
-
-## 关键概念
-
-> 从本书提炼的概念卡片，用 `[[3-概念/概念名]]` 链接
-
-## 对我的改变
-
-这本书让我...
-
-## 后续行动
-
-- [ ] 
-
----
-
-## 相关文件
-
-- 📝 [[{title}-文学笔记]] — 逐章摘录、金句、随手笔记
-""",
-        'book-notes': f"""---
-type: book-notes
-title: "{title}"
-parent: "[[{data.get('parent', title)}]]"
-chapter: "{data.get('chapter', '')}"
-created: "{now}"
-updated: "{now}"
----
-
-> 原始摘录、逐章内容、金句、随手笔记。
-> 枢纽页在 [[{data.get('parent', title)}]]
-
----
-
-{data.get('content', '')}
-
----
-
-## 金句收藏
-
-> 
-
----
-
-## 随手笔记
-
-- 
-""",
-        'video': f"""---
-type: video
-title: "{title}"
-source: "{data.get('source', '')}"
-url: "{data.get('url', '')}"
-status: {data.get('status', '已看')}
-rating: {data.get('rating', 0)}
-watch_date: {date}
-tags: {tag_str}
-concepts: []
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-**来源**：{data.get('source', '')}
-**链接**：{data.get('url', '')}
-
-## 核心内容
-{data.get('content', '')}
-
-## 关键点
-
-## 提炼概念
-
-> 从本视频提炼的概念，用 `[[3-概念/概念名]]` 链接
-
-## 我的思考
-
----
-
-## 相关文件
-
-- 📝 [[{title}-视频笔记]] — 逐段摘录、金句、随手笔记
-""",
-        'video-notes': f"""---
-type: video-notes
-title: "{title}"
-parent: "[[{data.get('parent', title)}]]"
-created: "{now}"
-updated: "{now}"
----
-
-> 原始摘录、逐段内容、金句、随手笔记。
-> 枢纽页在 [[{data.get('parent', title)}]]
-
----
-
-{data.get('content', '')}
-
----
-
-## 金句收藏
-
-> 
-
----
-
-## 随手笔记
-
-- 
-""",
-        'post': f"""---
-type: post
-title: "{title}"
-source: "{data.get('source', '')}"
-url: "{data.get('url', '')}"
-platform: ""
-status: {data.get('status', '已读')}
-tags: {tag_str}
-concepts: []
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-**来源**：{data.get('source', '')}
-**链接**：{data.get('url', '')}
-**平台**：
-
-## 核心内容
-
-{data.get('content', '')}
-
-## 关键观点
-
-## 提炼概念
-
-> 从本帖子提炼的概念，用 `[[3-概念/概念名]]` 链接
-
-## 我的思考
-
----
-
-## 相关文件
-
-- 📝 [[{title}-帖子笔记]] — 逐段摘录、金句、随手笔记
-""",
-        'post-notes': f"""---
-type: post-notes
-title: "{title}"
-parent: "[[{data.get('parent', title)}]]"
-created: "{now}"
-updated: "{now}"
----
-
-> 原始摘录、逐段内容、金句、随手笔记。
-> 枢纽页在 [[{data.get('parent', title)}]]
-
----
-
-{data.get('content', '')}
-
----
-
-## 金句收藏
-
-> 
-
----
-
-## 随手笔记
-
-- 
-""",
-        'concept': f"""---
-type: concept
-title: "{title}"
-aliases: []
-tags: {tag_str}
-source: "[[{data.get('source', '')}]]"
-domain: "{data.get('domain', '')}"
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-> {data.get('definition', '一句话定义')}
-
-## 来源
-- [[{data.get('source', '')}]]
-
-## 原文摘录
-{data.get('excerpt', '')}
-
-## 核心解释
-{data.get('content', '')}
-
-## 怎么用
-{data.get('how_to_use', '')}
-
-## 关联概念
-""",
-        'reflection': f"""---
-type: reflection
-title: "{title}"
-mood: {data.get('mood', '😌 平静')}
-period: weekly
-tags: {tag_str}
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-**心情**：{data.get('mood', '😌 平静')}
-
-## 关键收获
-
-{data.get('content', '')}
-
-## 启发我的内容
-
-## 做对了什么
-
-## 需要改进
-
-## 下一步行动
-""",
-        'problem': f"""---
-type: problem
-title: "{title}"
-status: {data.get('status', '待解决')}
-priority: {data.get('priority', '中')}
-domain: "{data.get('domain', '')}"
-tags: {tag_str}
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-**状态**：{data.get('status', '待解决')}
-**优先级**：{data.get('priority', '中')}
-
-## 问题描述
-{data.get('content', '')}
-
-## 背景
-
-## 可能的方案
-
-## 关联行动
-""",
-        'plan': _plan_template(data, tag_str, date, now),
-        'quicknote': f"""---
-type: quicknote
-title: "{title}"
-tags: {tag_str}
-created: "{now}"
----
-
-# {title}
-
-{data.get('content', '')}
-""",
+    # 基础上下文（所有模板共享）
+    ctx = {
+        'title': title,
+        'now': now,
+        'date': date,
+        'tag_str': tag_str,
+        'parent': data.get('parent', title),
     }
-    return templates.get(item_type, templates['quicknote'])
-
-
-def _plan_template(data, tag_str, date, now):
-    """根据 plan_type 生成行动模板或习惯模板"""
-    title = data.get('title', '未命名')
-    plan_type = data.get('plan_type', 'action')
-    source_concept = data.get('source_concept', '')
-
-    if plan_type == 'habit':
-        freq = data.get('frequency', 'daily')
-        return f"""---
-type: plan
-title: "{title}"
-plan_type: habit
-status: {data.get('status', '活跃')}
-frequency: {freq}
-streak: 0
-best_streak: 0
-last_checkin: ""
-source_concept: "{source_concept}"
-tags: {tag_str}
-created: "{now}"
-updated: "{now}"
----
-
-# {title}
-
-**类型**：习惯养成 · **频率**：{freq}
-**状态**：{data.get('status', '活跃')}
-**连续天数**：0 天 · **历史最长**：0 天
-
-## 为什么养成这个习惯
-
-{data.get('content', '')}
-
-## 触发提示（环境设计）
-
-> 把习惯和行为绑定到已有的日常流程上，降低启动阻力
-
-## 奖励机制
-
-> 完成后的即时正向反馈
-
-## 打卡记录
-
-| 日期 | 备注 |
-|------|------|
-"""
+    # 解析模板文件名：plan 按 plan_type 选择 action / habit 变体
+    if item_type == 'plan':
+        fname = f"plan-{data.get('plan_type', 'action')}"
     else:
-        # action 模板（默认）
-        return f"""---
-type: plan
-title: "{title}"
-plan_type: action
-status: {data.get('status', '待开始')}
-priority: {data.get('priority', '中')}
-progress: {data.get('progress', 0)}
-start_date: {date}
-due_date: {data.get('due_date', '')}
-source_concept: "{source_concept}"
-tags: {tag_str}
-created: "{now}"
-updated: "{now}"
----
+        fname = item_type
+    if not (_TEMPLATES_DIR / f'{fname}.md').exists():
+        fname = 'quicknote'
+    # 合并：实际数据优先，其次为类型默认值
+    defaults = _TEMPLATE_DEFAULTS.get(fname, {})
+    for k in set(defaults) | set(data):
+        if k not in ctx:
+            ctx[k] = data.get(k, defaults.get(k, ''))
+    return _substitute(_load_template(fname), ctx)
 
-# {title}
 
-**状态**：{data.get('status', '待开始')}
-**优先级**：{data.get('priority', '中')}
-**进度**：{data.get('progress', 0)}%
-**来源概念**：{source_concept or '无'}
-
-## 为什么做
-
-## 目标
-
-{data.get('content', '')}
-
-## 执行步骤
-
-- [ ] 
-"""
+def concept_display_body(title, definition, source, excerpt, content, how_to_use):
+    """按模板格式生成概念正文（definition/excerpt/how_to_use/content 为正文唯一来源）"""
+    ctx = {
+        'title': title,
+        'definition': definition,
+        'source': source,
+        'excerpt': excerpt,
+        'content': content,
+        'how_to_use': how_to_use,
+    }
+    return _substitute(_load_template('concept-body'), ctx)
 
 
 def _build_frontmatter(fm):
@@ -415,14 +125,6 @@ def _build_frontmatter(fm):
     return '\n'.join(lines)
 
 
-def concept_display_body(title, definition, source, excerpt, content, how_to_use):
-    """按模板格式生成概念正文（definition/excerpt/how_to_use/content 为正文唯一来源）"""
-    return (
-        f"# {title}\n\n"
-        f"> {definition}\n\n"
-        f"## 来源\n- [[{source}]]\n\n"
-        f"## 原文摘录\n{excerpt}\n\n"
-        f"## 核心解释\n{content}\n\n"
-        f"## 怎么用\n{how_to_use}\n\n"
-        f"## 关联概念\n"
-    )
+# 模块加载时预读所有模板：缺失文件立即暴露，避免运行时才报错
+for _name in list(_TEMPLATE_DEFAULTS) + ['concept-body']:
+    _load_template(_name)

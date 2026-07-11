@@ -28,59 +28,30 @@ class QueryMixin:
             return
         self._send_json(search_items(q))
 
-    def _handle_dashboard(self):
+    def _compute_type_counts(self):
+        """扫描各类型目录，返回 (counts, recent_all)。
+        书籍/视频/帖子目录只计枢纽页，配套笔记数量单独统计。"""
         counts = {}
         recent_all = []
         for d, t in DIR_TYPE.items():
             files = list_md_files(d)
-            # 书籍目录下，只统计枢纽页（type=book），文学笔记不单独计数
-            if t == 'book':
+            # 书籍/视频/帖子目录下，只统计枢纽页（type=t），笔记不单独计数
+            if t in ('book', 'video', 'post'):
                 hub_files = []
                 note_count = 0
+                note_type = t + '-notes'
                 for f in files:
                     try:
                         fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
-                        ftype = fm.get('type', 'book')
-                        if ftype == 'book':
+                        ftype = fm.get('type', t)
+                        if ftype == t:
                             hub_files.append(f)
-                        elif ftype == 'book-notes':
+                        elif ftype == note_type:
                             note_count += 1
                     except Exception:
                         hub_files.append(f)
                 files = hub_files
-                counts['book-notes'] = note_count
-            # 视频目录下，同样只统计枢纽页（type=video），视频笔记不单独计数
-            if t == 'video':
-                hub_files = []
-                note_count = 0
-                for f in files:
-                    try:
-                        fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
-                        ftype = fm.get('type', 'video')
-                        if ftype == 'video':
-                            hub_files.append(f)
-                        elif ftype == 'video-notes':
-                            note_count += 1
-                    except Exception:
-                        hub_files.append(f)
-                files = hub_files
-                counts['video-notes'] = note_count
-            # 帖子目录下，只统计枢纽页（type=post），帖子笔记不单独计数
-            if t == 'post':
-                hub_files = []
-                note_count = 0
-                for f in files:
-                    try:
-                        fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
-                        ftype = fm.get('type', 'post')
-                        if ftype == 'post':
-                            hub_files.append(f)
-                        elif ftype == 'post-notes':
-                            note_count += 1
-                    except Exception:
-                        hub_files.append(f)
-                files = hub_files
-                counts['post-notes'] = note_count
+                counts[note_type] = note_count
             counts[t] = len(files)
             for f in files:
                 try:
@@ -89,7 +60,10 @@ class QueryMixin:
                 except Exception as e2:
                     log(f"ERROR reading {f}: {e2}")
                     traceback.print_exc()
-        # 统计标签总数
+        return counts, recent_all
+
+    def _count_tags(self):
+        """统计全库标签去重总数"""
         all_tags = set()
         for d in DIR_TYPE:
             for f in list_md_files(d):
@@ -106,8 +80,10 @@ class QueryMixin:
                             all_tags.add(tg)
                 except Exception:
                     pass
-        counts['tagCount'] = len(all_tags)
-        # 统计领域总数
+        return len(all_tags)
+
+    def _count_domains(self):
+        """统计全库领域去重总数"""
         all_domains = set()
         for d in DIR_TYPE:
             for f in list_md_files(d):
@@ -121,7 +97,12 @@ class QueryMixin:
                                 all_domains.add(dn)
                 except Exception:
                     pass
-        counts['domainCount'] = len(all_domains)
+        return len(all_domains)
+
+    def _handle_dashboard(self):
+        counts, recent_all = self._compute_type_counts()
+        counts['tagCount'] = self._count_tags()
+        counts['domainCount'] = self._count_domains()
         recent_all.sort(key=lambda x: x['mtime'], reverse=True)
         self._send_json({
             'counts': counts,

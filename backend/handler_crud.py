@@ -15,9 +15,60 @@ from backend.vault import (
 from backend.templates import generate_md, _build_frontmatter, concept_display_body
 
 
+# 自动生成笔记的后缀映射（book→文学笔记, video→视频笔记, post→帖子笔记）
+_NOTE_SUFFIX = {
+    'book': '文学笔记',
+    'video': '视频笔记',
+    'post': '帖子笔记',
+}
+
+
 class CrudMixin:
     """条目 CRUD / 上传 / 打卡。依赖宿主类提供 _send_json / _read_body / self.headers / self.rfile。
     注意：_handle_create_item 会调用 self._embed_bilibili_cover_datauri（由 CoverMixin 提供，运行时经 self 解析）。"""
+
+    @staticmethod
+    def _unique_filepath(directory, base_title):
+        """在 directory 下生成不重名的 <base_title>.md 路径（已存在则追加时间戳）"""
+        fname = sanitize_filename(base_title) + '.md'
+        fp = directory / fname
+        if fp.exists():
+            fp = directory / f'{sanitize_filename(base_title)}_{int(time.time())}.md'
+        return fp
+
+    def _create_parent_with_notes(self, item_type, data):
+        """book/video/post：建同名子目录→写枢纽页→自动建笔记，返回枢纽页路径"""
+        title = sanitize_filename(data.get('title', '未命名'))
+        sub_dir = VAULT_ROOT / TYPE_DIR[item_type] / title
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        hub_fp = self._unique_filepath(sub_dir, title)
+        hub_fp.write_text(generate_md(item_type, data), encoding='utf-8')
+        # 自动生成配套笔记（文学/视频/帖子笔记）
+        suffix = _NOTE_SUFFIX[item_type]
+        notes_title = f'{title}-{suffix}'
+        notes_fp = sub_dir / f'{notes_title}.md'
+        if not notes_fp.exists():
+            note_data = dict(data)
+            note_data['title'] = notes_title
+            note_data['parent'] = title
+            notes_fp.write_text(generate_md(item_type + '-notes', note_data), encoding='utf-8')
+        # 视频：抓取并本地化 B 站封面（仅外网可达时；失败则留空）
+        if item_type == 'video':
+            self._embed_bilibili_cover_datauri(hub_fp)
+        return hub_fp
+
+    def _create_note_under_parent(self, item_type, data):
+        """book-notes/video-notes/post-notes：在 parent 子目录下写笔记，返回路径"""
+        parent = data.get('parent', '')
+        note_title = data.get('title', '未命名笔记')
+        if parent:
+            sub_dir = VAULT_ROOT / TYPE_DIR[item_type] / sanitize_filename(parent)
+            sub_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            sub_dir = VAULT_ROOT / TYPE_DIR[item_type]
+        fp = self._unique_filepath(sub_dir, note_title)
+        fp.write_text(generate_md(item_type, data), encoding='utf-8')
+        return fp
 
     def _handle_create_item(self):
         data = self._read_body()
@@ -25,128 +76,15 @@ class CrudMixin:
         if item_type not in TYPE_DIR:
             self._send_json({'error': 'Invalid type'}, 400)
             return
-        md_text = generate_md(item_type, data)
-        fname = sanitize_filename(data.get('title', '未命名')) + '.md'
-        target_dir = VAULT_ROOT / TYPE_DIR[item_type]
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        # 书籍特殊处理：创建子文件夹 + 自动生成文学笔记
-        if item_type == 'book':
-            book_title = sanitize_filename(data.get('title', '未命名'))
-            book_dir = target_dir / book_title
-            book_dir.mkdir(parents=True, exist_ok=True)
-            filepath = book_dir / f'{book_title}.md'
-            if filepath.exists():
-                filepath = book_dir / f'{book_title}_{int(time.time())}.md'
-            filepath.write_text(md_text, encoding='utf-8')
-
-            # 自动创建文学笔记文件
-            notes_path = book_dir / f'{book_title}-文学笔记.md'
-            if not notes_path.exists():
-                note_data = dict(data)
-                note_data['title'] = f'{book_title}-文学笔记'
-                note_data['parent'] = book_title
-                notes_md = generate_md('book-notes', note_data)
-                notes_path.write_text(notes_md, encoding='utf-8')
-
-        # 视频特殊处理：创建子文件夹 + 自动生成视频笔记
-        elif item_type == 'video':
-            video_title = sanitize_filename(data.get('title', '未命名'))
-            video_dir = target_dir / video_title
-            video_dir.mkdir(parents=True, exist_ok=True)
-            filepath = video_dir / f'{video_title}.md'
-            if filepath.exists():
-                filepath = video_dir / f'{video_title}_{int(time.time())}.md'
-            filepath.write_text(md_text, encoding='utf-8')
-
-            # 自动创建视频笔记文件
-            notes_path = video_dir / f'{video_title}-视频笔记.md'
-            if not notes_path.exists():
-                note_data = dict(data)
-                note_data['title'] = f'{video_title}-视频笔记'
-                note_data['parent'] = video_title
-                notes_md = generate_md('video-notes', note_data)
-                notes_path.write_text(notes_md, encoding='utf-8')
-
-            # 自动抓取并本地化 B 站封面（仅在外网可达时；失败则留空，后续可手动上传/重新获取）
-            self._embed_bilibili_cover_datauri(filepath)
-
-        # 文学笔记独立创建：放入指定书籍的子文件夹
-        elif item_type == 'book-notes':
-            parent_book = data.get('parent', '')
-            note_title = data.get('title', '未命名笔记')
-            if parent_book:
-                book_dir_name = sanitize_filename(parent_book)
-                book_dir = target_dir / book_dir_name
-                book_dir.mkdir(parents=True, exist_ok=True)
-            else:
-                book_dir = target_dir
-            fname = sanitize_filename(note_title) + '.md'
-            filepath = book_dir / fname
-            if filepath.exists():
-                fname = f"{sanitize_filename(note_title)}_{int(time.time())}.md"
-                filepath = book_dir / fname
-            filepath.write_text(md_text, encoding='utf-8')
-
-        # 视频笔记独立创建：放入指定视频的子文件夹
-        elif item_type == 'video-notes':
-            parent_video = data.get('parent', '')
-            note_title = data.get('title', '未命名笔记')
-            if parent_video:
-                video_dir_name = sanitize_filename(parent_video)
-                video_dir = target_dir / video_dir_name
-                video_dir.mkdir(parents=True, exist_ok=True)
-            else:
-                video_dir = target_dir
-            fname = sanitize_filename(note_title) + '.md'
-            filepath = video_dir / fname
-            if filepath.exists():
-                fname = f"{sanitize_filename(note_title)}_{int(time.time())}.md"
-                filepath = video_dir / fname
-            filepath.write_text(md_text, encoding='utf-8')
-
-        # 帖子特殊处理：创建子文件夹 + 自动生成帖子笔记
-        elif item_type == 'post':
-            post_title = sanitize_filename(data.get('title', '未命名'))
-            post_dir = target_dir / post_title
-            post_dir.mkdir(parents=True, exist_ok=True)
-            filepath = post_dir / f'{post_title}.md'
-            if filepath.exists():
-                filepath = post_dir / f'{post_title}_{int(time.time())}.md'
-            filepath.write_text(md_text, encoding='utf-8')
-
-            # 自动创建帖子笔记文件
-            notes_path = post_dir / f'{post_title}-帖子笔记.md'
-            if not notes_path.exists():
-                note_data = dict(data)
-                note_data['title'] = f'{post_title}-帖子笔记'
-                note_data['parent'] = post_title
-                notes_md = generate_md('post-notes', note_data)
-                notes_path.write_text(notes_md, encoding='utf-8')
-
-        # 帖子笔记独立创建：放入指定帖子的子文件夹
-        elif item_type == 'post-notes':
-            parent_post = data.get('parent', '')
-            note_title = data.get('title', '未命名笔记')
-            if parent_post:
-                post_dir_name = sanitize_filename(parent_post)
-                post_dir = target_dir / post_dir_name
-                post_dir.mkdir(parents=True, exist_ok=True)
-            else:
-                post_dir = target_dir
-            fname = sanitize_filename(note_title) + '.md'
-            filepath = post_dir / fname
-            if filepath.exists():
-                fname = f"{sanitize_filename(note_title)}_{int(time.time())}.md"
-                filepath = post_dir / fname
-            filepath.write_text(md_text, encoding='utf-8')
+        if item_type in ('book', 'video', 'post'):
+            filepath = self._create_parent_with_notes(item_type, data)
+        elif item_type in ('book-notes', 'video-notes', 'post-notes'):
+            filepath = self._create_note_under_parent(item_type, data)
         else:
-            filepath = target_dir / fname
-            if filepath.exists():
-                fname = f"{sanitize_filename(data.get('title', '未命名'))}_{int(time.time())}.md"
-                filepath = target_dir / fname
-            filepath.write_text(md_text, encoding='utf-8')
-
+            target_dir = VAULT_ROOT / TYPE_DIR[item_type]
+            target_dir.mkdir(parents=True, exist_ok=True)
+            filepath = self._unique_filepath(target_dir, data.get('title', '未命名'))
+            filepath.write_text(generate_md(item_type, data), encoding='utf-8')
         item = item_from_file(filepath)
         self._send_json(item, 201)
 

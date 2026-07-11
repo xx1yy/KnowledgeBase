@@ -4,6 +4,7 @@
 
 import os
 import re
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from backend.config import VAULT_ROOT, DIR_TYPE
@@ -123,76 +124,130 @@ def _parse_concept_sections(body):
     how_to_use = sec('怎么用')
     return definition, excerpt, content, how_to_use
 
+@dataclass
+class VaultItem:
+    """条目数据模型：item_from_file 的返回结构（同时也是 API 的 JSON 契约）。
+
+    集中声明所有字段，使 30+ 字段的形状一目了然；item_from_file
+    分步填充后通过 asdict() 返回普通 dict，保证前后端契约不变。
+    """
+    # 身份与路径
+    id: str = ''
+    path: str = ''
+    type: str = ''
+    title: str = ''
+    # 通用元数据
+    author: str = ''
+    source: str = ''
+    status: str = ''
+    priority: str = ''
+    rating: int = 0
+    progress: int = 0
+    domain: str = ''
+    chapter: str = ''
+    order: object = None
+    tags: list = field(default_factory=list)
+    concepts: list = field(default_factory=list)
+    mood: str = ''
+    # 日期
+    start_date: str = ''
+    finish_date: str = ''
+    watch_date: str = ''
+    due_date: str = ''
+    # 链接与来源
+    url: str = ''
+    plan_type: str = ''
+    frequency: str = ''
+    streak: int = 0
+    best_streak: int = 0
+    last_checkin: str = ''
+    source_concept: str = ''
+    cover: str = ''
+    # 正文与概念结构化字段
+    content: str = ''
+    definition: str = ''
+    how_to_use: str = ''
+    excerpt: str = ''
+    links: list = field(default_factory=list)
+    # 时间戳
+    created: str = ''
+    updated: str = ''
+    mtime: float = 0.0
+    size: int = 0
+
+
+def _normalize_list(val):
+    """把 frontmatter 中的 tags / concepts 规范为列表"""
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str) and val:
+        return [t.strip() for t in re.split(r'[,，、]', val) if t.strip()]
+    return []
+
+
 def item_from_file(filepath):
-    """从 .md 文件读条目数据"""
+    """从 .md 文件读条目数据，返回 VaultItem 的 dict 形式（保持既有 API 契约）"""
     text = filepath.read_text(encoding='utf-8')
     fm, content, _ = parse_frontmatter(text)
     links = extract_wikilinks(text)
     _type = fm.get('type', '') or get_file_type(filepath)
     stat = filepath.stat()
-    tags = fm.get('tags', [])
-    if not isinstance(tags, list):
-        if isinstance(tags, str) and tags:
-            tags = [t.strip() for t in re.split(r'[,，、]', tags) if t.strip()]
-        else:
-            tags = []
-    concepts = fm.get('concepts', [])
-    if not isinstance(concepts, list):
-        if isinstance(concepts, str) and concepts:
-            concepts = [concepts]
-        else:
-            concepts = []
-    d = {
-        'id': filepath.stem,
-        'path': str(filepath.relative_to(VAULT_ROOT)).replace('\\', '/'),
-        'type': _type,
-        'title': fm.get('title', filepath.stem),
-        'author': fm.get('author', ''),
-        'source': fm.get('source', ''),
-        'status': fm.get('status', ''),
-        'priority': fm.get('priority', ''),
-        'rating': fm.get('rating', 0),
-        'progress': fm.get('progress', 0),
-        'domain': fm.get('domain', ''),
-        'chapter': fm.get('chapter', ''),
-        'order': fm.get('order', None),
-        'tags': tags,
-        'concepts': concepts,
-        'mood': fm.get('mood', ''),
-        'start_date': fm.get('start_date', ''),
-        'finish_date': fm.get('finish_date', ''),
-        'watch_date': fm.get('watch_date', ''),
-        'due_date': fm.get('due_date', ''),
-        'url': fm.get('url', ''),
-        'plan_type': fm.get('plan_type', ''),
-        'frequency': fm.get('frequency', ''),
-        'streak': fm.get('streak', 0),
-        'best_streak': fm.get('best_streak', 0),
-        'last_checkin': fm.get('last_checkin', ''),
-        'source_concept': fm.get('source_concept', ''),
-        'cover': fm.get('cover', ''),
-        'content': content.strip(),
-        'definition': fm.get('definition', ''),
-        'how_to_use': fm.get('how_to_use', ''),
-        'excerpt': fm.get('excerpt', ''),
-        'links': links,
-        'created': fm.get('created', ''),
-        'updated': fm.get('updated', ''),
-        'mtime': stat.st_mtime * 1000,
-        'size': stat.st_size,
-    }
-    # 概念：结构化字段优先从正文解析（模板把它们写在正文，frontmatter 可能为空）
+
+    # ① 身份与路径
+    item = VaultItem(
+        id=filepath.stem,
+        path=str(filepath.relative_to(VAULT_ROOT)).replace('\\', '/'),
+        type=_type,
+        title=fm.get('title', filepath.stem),
+    )
+    # ② frontmatter 标量 / 列表字段
+    item.author = fm.get('author', '')
+    item.source = fm.get('source', '')
+    item.status = fm.get('status', '')
+    item.priority = fm.get('priority', '')
+    item.rating = fm.get('rating', 0)
+    item.progress = fm.get('progress', 0)
+    item.domain = fm.get('domain', '')
+    item.chapter = fm.get('chapter', '')
+    item.order = fm.get('order', None)
+    item.tags = _normalize_list(fm.get('tags'))
+    item.concepts = _normalize_list(fm.get('concepts'))
+    item.mood = fm.get('mood', '')
+    item.start_date = fm.get('start_date', '')
+    item.finish_date = fm.get('finish_date', '')
+    item.watch_date = fm.get('watch_date', '')
+    item.due_date = fm.get('due_date', '')
+    item.url = fm.get('url', '')
+    item.plan_type = fm.get('plan_type', '')
+    item.frequency = fm.get('frequency', '')
+    item.streak = fm.get('streak', 0)
+    item.best_streak = fm.get('best_streak', 0)
+    item.last_checkin = fm.get('last_checkin', '')
+    item.source_concept = fm.get('source_concept', '')
+    item.cover = fm.get('cover', '')
+    # ③ 正文与结构化字段
+    item.content = content.strip()
+    item.definition = fm.get('definition', '')
+    item.how_to_use = fm.get('how_to_use', '')
+    item.excerpt = fm.get('excerpt', '')
+    item.links = links
+    # ④ 时间戳
+    item.created = fm.get('created', '')
+    item.updated = fm.get('updated', '')
+    item.mtime = stat.st_mtime * 1000
+    item.size = stat.st_size
+    # ⑤ 概念：结构化字段优先从正文解析（模板把它们写在正文，frontmatter 可能为空）
     if _type == 'concept':
         d_def, d_exc, d_con, d_how = _parse_concept_sections(content)
         if d_def:
-            d['definition'] = d_def
+            item.definition = d_def
         if d_exc:
-            d['excerpt'] = d_exc
+            item.excerpt = d_exc
         if d_con:
-            d['content'] = d_con
+            item.content = d_con
         if d_how:
-            d['how_to_use'] = d_how
-    return d
+            item.how_to_use = d_how
+    return asdict(item)
 
 
 def search_items(query):
