@@ -342,6 +342,7 @@ def get_graph_data():
                     'type': item['type'],
                     'status': item['status'],
                     'path': item['path'],
+                    'domain': item.get('domain', ''),
                 })
             for link in item['links']:
                 link_name = link.split('/')[-1]

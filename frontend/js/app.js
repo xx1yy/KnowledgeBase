@@ -14,6 +14,7 @@
     if(localStorage.getItem('kb_sidebar')==='1') document.body.classList.add('sidebar-collapsed');
     if(localStorage.getItem('kb_rightbar')==='1') document.body.classList.add('rightbar-collapsed');
     await fetchAuthToken();   // 先获取认证 token
+    initDomainFilter();       // 填充领域过滤器（currentDomain 已在加载期从 localStorage 恢复）
     await loadDashboard();
     await loadRecentConcepts();
     renderNav();

@@ -382,3 +382,15 @@ body.rightbar-collapsed #rightbarReveal{display:inline-flex}
 .rightbar-concept .rc-date{font-size:10px;color:var(--faint);flex-shrink:0}
 .rightbar-actions{display:flex;flex-direction:column;gap:6px}
 .rightbar-actions .btn-p,.rightbar-actions .btn-g{width:100%;justify-content:center;font-size:12px;padding:8px 0}
+
+/* 全局领域过滤器（顶栏多选） */
+.domain-filter{position:relative}
+.domain-filter .caret{font-size:9px;opacity:.6;margin-left:2px}
+.domain-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:50;min-width:180px;max-height:60vh;overflow:auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px}
+.domain-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;color:var(--text);cursor:pointer}
+.domain-opt:hover{background:var(--asoft)}
+.domain-all{border-bottom:1px solid var(--border);margin-bottom:4px;font-weight:600}
+.domain-list{display:flex;flex-direction:column}
+.domain-cnt{margin-left:auto;font-size:11px;color:var(--faint);background:var(--asoft);border-radius:10px;padding:1px 7px}
+.domain-filter.active #domainFilterBtn{border-color:var(--accent);color:var(--accent)}

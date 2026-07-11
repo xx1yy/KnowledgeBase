@@ -16,22 +16,53 @@ from backend.vault import (
 from backend.templates import _build_frontmatter
 
 
+def _in_domains(domain_str, dset):
+    """判断 domain_str（逗号/、/；分隔的多领域）是否与 dset 任一相交。
+    dset 为空 / None 视为「不过滤」，直接放行。"""
+    if not dset:
+        return True
+    if not domain_str:
+        return False
+    toks = {t.strip() for t in re.split(r'[,，、;；]', domain_str) if t.strip()}
+    return bool(toks & dset)
+
+
 class QueryMixin:
     """只读查询/统计 + 标签批量重命名。依赖宿主类提供 _send_json / _read_body / self.params。"""
 
+    def _domain_set(self):
+        """从 self.params 解析 ?domain=a,b,c（多选 OR）为集合；空则返回 None（不过滤）。"""
+        raw = self.params.get('domain', [''])[0] if self.params else ''
+        if not raw:
+            return None
+        s = {t.strip() for t in re.split(r'[,，、;；]', raw) if t.strip()}
+        return s or None
+
     def _handle_graph(self):
-        self._send_json(get_graph_data())
+        data = get_graph_data()
+        dset = self._domain_set()
+        if dset:
+            nodes = [n for n in data['nodes'] if _in_domains(n.get('domain', ''), dset)]
+            ids = {n['id'] for n in nodes}
+            edges = [e for e in data['edges'] if e['source'] in ids and e['target'] in ids]
+            data = {'nodes': nodes, 'edges': edges}
+        self._send_json(data)
 
     def _handle_search(self):
         q = self.params.get('q', [''])[0]
         if not q:
             self._send_json([])
             return
-        self._send_json(search_items(q))
+        results = search_items(q)
+        dset = self._domain_set()
+        if dset:
+            results = [r for r in results if _in_domains(r.get('domain', ''), dset)]
+        self._send_json(results)
 
-    def _compute_type_counts(self):
+    def _compute_type_counts(self, dset=None):
         """扫描各类型目录，返回 (counts, recent_all)。
-        书籍/视频/帖子目录只计枢纽页，配套笔记数量单独统计。"""
+        书籍/视频/帖子目录只计枢纽页，配套笔记数量单独统计。
+        dset 非空时仅统计命中任一领域的条目（枢纽页与配套笔记分别判定）。"""
         counts = {}
         recent_all = []
         for d, t in DIR_TYPE.items():
@@ -44,15 +75,30 @@ class QueryMixin:
                 for f in files:
                     try:
                         fm, _ = get_frontmatter(f)
-                        ftype = fm.get('type', t)
-                        if ftype == t:
-                            hub_files.append(f)
-                        elif ftype == note_type:
-                            note_count += 1
                     except Exception:
+                        fm = {}
+                    ftype = fm.get('type', t)
+                    if ftype == t:
+                        if dset and not _in_domains(fm.get('domain', ''), dset):
+                            continue
                         hub_files.append(f)
+                    elif ftype == note_type:
+                        if dset and not _in_domains(fm.get('domain', ''), dset):
+                            continue
+                        note_count += 1
                 files = hub_files
                 counts[note_type] = note_count
+            else:
+                if dset:
+                    filtered = []
+                    for f in files:
+                        try:
+                            fm, _ = get_frontmatter(f)
+                        except Exception:
+                            fm = {}
+                        if _in_domains(fm.get('domain', ''), dset):
+                            filtered.append(f)
+                    files = filtered
             counts[t] = len(files)
             for f in files:
                 try:
@@ -101,7 +147,8 @@ class QueryMixin:
         return len(all_domains)
 
     def _handle_dashboard(self):
-        counts, recent_all = self._compute_type_counts()
+        dset = self._domain_set()
+        counts, recent_all = self._compute_type_counts(dset)
         counts['tagCount'] = self._count_tags()
         counts['domainCount'] = self._count_domains()
         recent_all.sort(key=lambda x: x['mtime'], reverse=True)
@@ -121,6 +168,9 @@ class QueryMixin:
         # 书籍、视频列表只显示枢纽页，笔记类型只显示笔记
         if item_type in ('book', 'video', 'book-notes', 'video-notes'):
             items = [it for it in items if it['type'] == item_type]
+        dset = self._domain_set()
+        if dset:
+            items = [it for it in items if _in_domains(it.get('domain', ''), dset)]
         items.sort(key=lambda x: x['mtime'], reverse=True)
         self._send_json(items)
 

@@ -1,7 +1,7 @@
 // Knowledge Graph
 async function renderGraph(){
   document.getElementById('content').innerHTML = `<div class="graph-container" id="graphBox"><div class="empty" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)"><div class="big">🕸️</div>加载中…</div></div>`;
-  const data = await get('/graph');
+  const data = await get(withDomain('/graph'));
   setTimeout(()=>drawGraph(data),100);
 }
 

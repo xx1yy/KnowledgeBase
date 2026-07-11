@@ -27,6 +27,13 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" id="searchBox" placeholder="搜索全部内容…">
     </div>
+    <div class="domain-filter" id="domainFilter">
+      <button type="button" id="domainFilterBtn" class="btn-g sm" title="按领域过滤全部内容">🗂️ <span id="domainFilterLabel">全部领域</span> <span class="caret">▾</span></button>
+      <div class="domain-pop" id="domainFilterPop">
+        <label class="domain-opt domain-all"><input type="checkbox" id="dfAll" checked> 全部领域</label>
+        <div id="domainFilterList" class="domain-list"></div>
+      </div>
+    </div>
     <button class="btn-p" id="addBtn" data-action="openQuickCapture" data-args='[]' style="display:none">+ 快速记录</button>
   </header>
   <div style="display:flex;flex:1;overflow:hidden">
@@ -49,6 +56,7 @@
 <script src="js/core/utils.js"></script>
 <script src="js/core/markdown.js"></script>
 <script src="js/core/router.js"></script>
+<script src="js/core/domain-filter.js"></script>
 <!-- Notes: 笔记/概念/图片 -->
 <script src="js/notes/concept-detail.js"></script>
 <script src="js/core/modals.js"></script>

@@ -4,7 +4,7 @@ let counts = {};
 const _API = (location.host ? '' : 'http://localhost:16000') + '/api';
 
 async function loadDashboard(){
-  try{ dashboardData = await get('/dashboard'); counts = dashboardData.counts||{}; }
+  try{ dashboardData = await get(withDomain('/dashboard')); counts = dashboardData.counts||{}; }
   catch(e){ dashboardData = {counts:{},recent:[],total:0}; counts = {}; }
 }
 
@@ -40,7 +40,7 @@ async function renderDashboard(){
 }
 
 async function renderList(type){
-  const data = await get(`/items?type=${type}`);
+  const data = await get(withDomain(`/items?type=${type}`));
   const filtered = data.filter(it => it.type === type);
   if(!filtered.length) return document.getElementById('content').innerHTML = `<div class="empty"><div class="big">${TYPE_MAP[type]?.icon||''}</div>还没有${TYPE_MAP[type]?.label||''}记录</div>`;
 

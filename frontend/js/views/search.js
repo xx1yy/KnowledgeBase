@@ -7,7 +7,7 @@ let searchTimer;
 async function renderSearch(){
   const q = document.getElementById('searchBox').value.trim();
   if(!q) return document.getElementById('content').innerHTML = `<div class="empty"><div class="big">🔍</div>输入关键词搜索</div>`;
-  const results = await get(`/search?q=${encodeURIComponent(q)}`);
+  const results = await get(withDomain(`/search?q=${encodeURIComponent(q)}`));
   if(!results.length) return document.getElementById('content').innerHTML = `<div class="empty"><div class="big">🔍</div>没有找到「${ESC(q)}」</div>`;
   document.getElementById('content').innerHTML = `<p style="color:var(--muted);margin-bottom:14px">找到 ${results.length} 条结果</p>` + results.map(r=>`<div class="panel" style="cursor:pointer" data-action="openDetail" data-args='${JSON.stringify([r.path])}'>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
