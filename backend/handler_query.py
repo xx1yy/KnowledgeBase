@@ -27,6 +27,32 @@ def _in_domains(domain_str, dset):
     return bool(toks & dset)
 
 
+# 笔记类型 → 其所属枢纽页类型（用于领域继承）
+_HUB_FOR_NOTE = {'book-notes': 'book', 'video-notes': 'video', 'post-notes': 'post'}
+
+
+def _note_effective_domain(fm, note_path):
+    """笔记的有效领域 = 自身 domain；若为空则继承同目录枢纽页（book/video/post）的 domain。
+
+    笔记本身通常不写 domain，但其所属书籍/视频/帖子有 domain，按领域过滤时
+    应视为与父级同域，否则选了领域后所有笔记会整体消失或整体残留。"""
+    dom = fm.get('domain')
+    if isinstance(dom, str) and dom.strip():
+        return dom.strip()
+    hub = _HUB_FOR_NOTE.get(fm.get('type', ''))
+    if hub and note_path is not None:
+        for sib in note_path.parent.glob('*.md'):
+            try:
+                sib_fm, _ = get_frontmatter(sib)
+            except Exception:
+                continue
+            if sib_fm.get('type') == hub:
+                sd = sib_fm.get('domain')
+                if isinstance(sd, str) and sd.strip():
+                    return sd.strip()
+    return ''
+
+
 class QueryMixin:
     """只读查询/统计 + 标签批量重命名。依赖宿主类提供 _send_json / _read_body / self.params。"""
 
@@ -56,6 +82,9 @@ class QueryMixin:
         results = search_items(q)
         dset = self._domain_set()
         if dset:
+            for r in results:
+                if r.get('type') in _HUB_FOR_NOTE:
+                    r['domain'] = _note_effective_domain(r, VAULT_ROOT / r['path'])
             results = [r for r in results if _in_domains(r.get('domain', ''), dset)]
         self._send_json(results)
 
@@ -83,7 +112,8 @@ class QueryMixin:
                             continue
                         hub_files.append(f)
                     elif ftype == note_type:
-                        if dset and not _in_domains(fm.get('domain', ''), dset):
+                        eff = _note_effective_domain(fm, f) if dset else ''
+                        if dset and not _in_domains(eff, dset):
                             continue
                         note_count += 1
                 files = hub_files
@@ -165,11 +195,14 @@ class QueryMixin:
             return
         d = TYPE_DIR[item_type]
         items = [item_from_file(f) for f in list_md_files(d)]
-        # 书籍、视频列表只显示枢纽页，笔记类型只显示笔记
-        if item_type in ('book', 'video', 'book-notes', 'video-notes'):
+        # 书籍、视频、帖子列表只显示枢纽页，笔记类型只显示笔记
+        if item_type in ('book', 'video', 'post', 'book-notes', 'video-notes', 'post-notes'):
             items = [it for it in items if it['type'] == item_type]
         dset = self._domain_set()
         if dset:
+            for it in items:
+                if it['type'] in _HUB_FOR_NOTE:
+                    it['domain'] = _note_effective_domain(it, VAULT_ROOT / it['path'])
             items = [it for it in items if _in_domains(it.get('domain', ''), dset)]
         items.sort(key=lambda x: x['mtime'], reverse=True)
         self._send_json(items)

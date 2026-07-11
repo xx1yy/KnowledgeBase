@@ -163,7 +163,7 @@ function downloadCroppedCover(proxyUrl, w, h, name){
 // ── 文学笔记列表 ──
 async function renderBookNotes(){
   let data;
-  try{ data = await get('/items?type=book-notes'); }
+  try{ data = await get(withDomain('/items?type=book-notes')); }
   catch(e){ data = []; }
   const notes = data.filter(it => it.type === 'book-notes');
 
@@ -229,7 +229,7 @@ async function renderBookNotes(){
 // ── 视频笔记列表 ──
 async function renderVideoNotes(){
   let data;
-  try{ data = await get('/items?type=video-notes'); }
+  try{ data = await get(withDomain('/items?type=video-notes')); }
   catch(e){ data = []; }
   const notes = data.filter(it => it.type === 'video-notes');
 
@@ -283,7 +283,7 @@ async function renderVideoNotes(){
 // ── 帖子笔记列表 ──
 async function renderPostNotes(){
   let data;
-  try{ data = await get('/items?type=post-notes'); }
+  try{ data = await get(withDomain('/items?type=post-notes')); }
   catch(e){ data = []; }
   const notes = data.filter(it => it.type === 'post-notes');
 
