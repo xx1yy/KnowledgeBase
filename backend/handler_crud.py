@@ -100,12 +100,12 @@ class CrudMixin:
             return
         old_text = fp.read_text(encoding='utf-8')
         fm, content, raw_fm = parse_frontmatter(old_text)
-        updatable = ['status', 'priority', 'rating', 'progress',
+        updatable = ['status', 'priority', 'rating', 'progress', 'start_date',
                      'mood', 'finish_date', 'watch_date', 'due_date',
                      'tags', 'title', 'author', 'source', 'url', 'domain',
                      'concepts', 'chapter', 'order', 'definition', 'how_to_use', 'excerpt',
                      'plan_type', 'frequency', 'streak', 'best_streak', 'last_checkin', 'source_concept',
-                     'cover']
+                     'cover', 'relations']
 
         # 概念：结构化字段以正文为唯一来源，重写正文而不是塞进 frontmatter
         if fm.get('type') == 'concept':

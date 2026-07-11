@@ -23,9 +23,18 @@ async function openEdit(filepath){
     `:''}
     ${it.type!=='concept'?`<div class="field"><label>状态</label><select id="f_status">${makeOptions({book:['想读','在读','已读'],video:['想看','已看'],problem:['待解决','解决中','已解决'],plan:(it.plan_type==='habit'?['活跃','暂停','已放弃']:['待开始','进行中','已完成']),reflection:['']},it.type,it.status)}</select></div>`:''}
     ${it.type==='book'||it.type==='video'?`<div class="field"><label>评分</label><select id="f_rating">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${n===it.rating?'selected':''}>${'★'.repeat(n)}${'☆'.repeat(5-n)}</option>`).join('')}</select></div>`:''}
+    ${['book','video','post'].includes(it.type)?`
+    <div class="field"><label>标题</label><input type="text" id="f_title" value="${ESC(it.title||'')}"></div>
+    <div class="field"><label>${it.type==='book'?'作者':'来源'}</label><input type="text" id="f_author" value="${ESC(it.author||it.source||'')}" placeholder="${it.type==='book'?'作者名':'来源（如 公众号 / 网站）'}"></div>
+    ${(it.type==='video'||it.type==='post')?`<div class="field"><label>链接 URL</label><input type="text" id="f_url" value="${ESC(it.url||'')}"></div>`:''}
+    ${it.type==='book'?`<div class="field"><label>开始日期</label><input type="date" id="f_start_date" value="${ESC(it.start_date||'')}"></div>`:''}
+    ${it.type==='book'?`<div class="field"><label>完成日期</label><input type="date" id="f_finish_date" value="${ESC(it.finish_date||'')}"></div>`:''}
+    ${it.type==='video'?`<div class="field"><label>观看日期</label><input type="date" id="f_watch_date" value="${ESC(it.watch_date||'')}"></div>`:''}
+    <div class="field"><label>标签（逗号分隔）</label><input type="text" id="f_tags" value="${ESC((it.tags||[]).join(', '))}" placeholder="如：学习方法, 认知科学"></div>
+    `:''}
     ${it.type==='problem'||it.type==='plan'?`<div class="field"><label>优先级</label><select id="f_priority">${['高','中','低'].map(p=>`<option ${p===it.priority?'selected':''}>${p}</option>`).join('')}</select></div>`:''}
     ${it.type==='reflection'?`<div class="field"><label>心情</label><select id="f_mood">${['😊 开心','😌 平静','😐 一般','😔 低落','😣 痛苦'].map(m=>`<option ${m===it.mood?'selected':''}>${m}</option>`).join('')}</select></div>`:''}
-    ${it.type==='concept'||it.type==='problem'?`<div class="field"><label>领域</label><input type="text" id="f_domain" value="${ESC(it.domain||'')}" placeholder="如：学习方法，认知心理学（多个用逗号分隔）"></div>`:''}
+    ${['book','video','post','concept','problem'].includes(it.type)?`<div class="field"><label>领域</label><input type="text" id="f_domain" value="${ESC(it.domain||'')}" placeholder="如：学习方法，认知心理学（多个用逗号分隔）"></div>`:''}
     ${it.type==='concept'?`
     <div class="field"><label>一句话定义</label><input type="text" id="f_definition" value="${ESC(it.definition||'')}" placeholder="用一句话概括这个概念"></div>
     <div class="field"><label>怎么用</label><textarea id="f_howto" style="min-height:90px">${ESC(it.how_to_use||'')}</textarea></div>
@@ -80,14 +89,32 @@ async function saveEdit(filepath){
   if(contentEl) data.content = contentEl.value;
   const domainEl = document.getElementById('f_domain');
   if(domainEl) data.domain = domainEl.value.trim();
-  // concept 专属字段（一句话定义 / 怎么用 / 原文摘录 / 来源 / 标签）
+  // concept 专属字段（一句话定义 / 怎么用 / 原文摘录 / 来源）
   if(type === 'concept'){
     const dEl = document.getElementById('f_definition'); if(dEl) data.definition = dEl.value;
     const hEl = document.getElementById('f_howto'); if(hEl) data.how_to_use = hEl.value;
     const eEl = document.getElementById('f_excerpt'); if(eEl) data.excerpt = eEl.value;
     const sEl = document.getElementById('f_source'); if(sEl) data.source = sEl.value.trim();
-    const tEl = document.getElementById('f_tags'); if(tEl) data.tags = tEl.value.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
   }
+  // 输入类（book / video / post）专属字段
+  if(type === 'book'){
+    const tEl = document.getElementById('f_title'); if(tEl) data.title = tEl.value.trim();
+    const aEl = document.getElementById('f_author'); if(aEl) data.author = aEl.value.trim();
+    const sdEl = document.getElementById('f_start_date'); if(sdEl) data.start_date = sdEl.value;
+    const fdEl = document.getElementById('f_finish_date'); if(fdEl) data.finish_date = fdEl.value;
+  } else if(type === 'video'){
+    const tEl = document.getElementById('f_title'); if(tEl) data.title = tEl.value.trim();
+    const sEl = document.getElementById('f_author'); if(sEl) data.source = sEl.value.trim();
+    const uEl = document.getElementById('f_url'); if(uEl) data.url = uEl.value.trim();
+    const wdEl = document.getElementById('f_watch_date'); if(wdEl) data.watch_date = wdEl.value;
+  } else if(type === 'post'){
+    const tEl = document.getElementById('f_title'); if(tEl) data.title = tEl.value.trim();
+    const sEl = document.getElementById('f_author'); if(sEl) data.source = sEl.value.trim();
+    const uEl = document.getElementById('f_url'); if(uEl) data.url = uEl.value.trim();
+  }
+  // 标签（concept / book / video / post 共用 f_tags）
+  const tagEl = document.getElementById('f_tags');
+  if(tagEl) data.tags = tagEl.value.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
   await put('/item', {path: fp, ...data});
   closeModal();
   await loadDashboard();

@@ -181,6 +181,7 @@ body.sidebar-collapsed .nav-item{padding:9px 0;justify-content:center;gap:0}
 
 .graph-container{width:100%;height:500px;position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .graph-container canvas{width:100%;height:100%}
+.graph-legend{position:absolute;left:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px}
 
 .notes-layout{display:flex;gap:14px;height:calc(100vh - 100px)}
 .notes-sidebar{width:200px;flex-shrink:0;overflow-y:auto;padding-right:2px}

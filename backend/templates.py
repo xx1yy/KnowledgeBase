@@ -111,6 +111,14 @@ def _build_frontmatter(fm):
         if isinstance(v, list):
             if not v:
                 lines.append(f'{k}: []')
+            elif isinstance(v[0], dict):
+                # 关系等「字典列表」→ 扁平字符串列表，每条 'to|type|note'。
+                # 采用扁平格式以兼容自定义 frontmatter 解析器（不支持嵌套映射）。
+                items = ', '.join(
+                    '"' + '|'.join(str(r.get(k, '') or '') for k in ('to', 'type', 'note')).replace('"', '\\"') + '"'
+                    for r in v
+                )
+                lines.append(f'{k}: [{items}]')
             else:
                 items = ', '.join(f'"{item}"' for item in v)
                 lines.append(f'{k}: [{items}]')

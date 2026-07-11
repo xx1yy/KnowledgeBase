@@ -7,6 +7,7 @@ status: {{status}}
 rating: {{rating}}
 watch_date: {{date}}
 tags: {{tag_str}}
+domain: ""
 concepts: []
 created: "{{now}}"
 updated: "{{now}}"

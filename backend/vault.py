@@ -212,6 +212,7 @@ class VaultItem:
     how_to_use: str = ''
     excerpt: str = ''
     links: list = field(default_factory=list)
+    relations: list = field(default_factory=list)
     # 时间戳
     created: str = ''
     updated: str = ''
@@ -226,6 +227,46 @@ def _normalize_list(val):
     if isinstance(val, str) and val:
         return [t.strip() for t in re.split(r'[,，、]', val) if t.strip()]
     return []
+
+
+def _link_target_name(raw):
+    """从 wikilink 形式（'[[3-概念/涌现]]' 或 '3-概念/涌现'）取出节点名（最后一段）"""
+    s = (raw or '').strip()
+    if s.startswith('[[') and s.endswith(']]'):
+        s = s[2:-2]
+    return s.split('/')[-1]
+
+
+def _normalize_relations(val):
+    """把 frontmatter 的 relations 列表规范为 [{to, type, note}] 列表。
+
+    存储格式：relations 为扁平字符串列表，每条 'to|type|note'（如
+    '[[3-概念/涌现]]|前置|备注'）。采用扁平字符串是为了兼容本项目的自定义
+    frontmatter 解析器（只支持标量/扁平列表，不支持嵌套映射）。type 缺省为 '相关'。
+    若手写 YAML 用了嵌套映射（dict），也兼容处理。
+    """
+    if not isinstance(val, list):
+        return []
+    out = []
+    for r in val:
+        if isinstance(r, dict):
+            to = str(r.get('to', '')).strip()
+            if not to:
+                continue
+            out.append({
+                'to': to,
+                'type': str(r.get('type', '相关')).strip() or '相关',
+                'note': str(r.get('note', '') or ''),
+            })
+        elif isinstance(r, str) and r.strip():
+            parts = r.split('|', 2)
+            to = parts[0].strip()
+            if not to:
+                continue
+            t = parts[1].strip() if len(parts) > 1 else '相关'
+            note = parts[2].strip() if len(parts) > 2 else ''
+            out.append({'to': to, 'type': t or '相关', 'note': note})
+    return out
 
 
 def item_from_file(filepath):
@@ -272,6 +313,7 @@ def item_from_file(filepath):
     item.how_to_use = fm.get('how_to_use', '')
     item.excerpt = fm.get('excerpt', '')
     item.links = links
+    item.relations = _normalize_relations(fm.get('relations'))
     # ④ 时间戳
     item.created = fm.get('created', '')
     item.updated = fm.get('updated', '')
@@ -326,7 +368,7 @@ def get_graph_data():
     nodes = []
     edges = []
     node_ids = set()
-    edge_set = set()
+    edge_map = {}  # (source, target) -> edge
 
     for d, _ in DIR_TYPE.items():
         for f in list_md_files(d):
@@ -344,16 +386,35 @@ def get_graph_data():
                     'path': item['path'],
                     'domain': item.get('domain', ''),
                 })
+            # 普通 wikilink → 关系类型「相关」（先占位，可能被下方的结构化关系覆盖）
             for link in item['links']:
-                link_name = link.split('/')[-1]
+                link_name = _link_target_name(link)
+                if not link_name:
+                    continue
                 edge_key = (item['id'], link_name)
-                if edge_key not in edge_set:
-                    edge_set.add(edge_key)
-                    edges.append({
+                if edge_key not in edge_map:
+                    edge_map[edge_key] = {
                         'source': item['id'],
                         'target': link_name,
                         'sourceType': item['type'],
-                    })
+                        'relation': '相关',
+                        'relationLabel': '相关',
+                    }
+            # 结构化关系 → 带类型（覆盖同对的「相关」边）
+            for rel in item.get('relations', []):
+                link_name = _link_target_name(rel.get('to', ''))
+                if not link_name:
+                    continue
+                edge_key = (item['id'], link_name)
+                rtype = rel.get('type') or '相关'
+                edge_map[edge_key] = {
+                    'source': item['id'],
+                    'target': link_name,
+                    'sourceType': item['type'],
+                    'relation': rtype,
+                    'relationLabel': rtype,
+                }
+    edges = list(edge_map.values())
     return {'nodes': nodes, 'edges': edges}
 
 

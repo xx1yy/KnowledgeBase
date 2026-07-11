@@ -40,17 +40,24 @@ function drawGraph(data){
     });
   }
 
+  const relColors = (typeof RELATION_COLORS !== 'undefined') ? RELATION_COLORS : {};
   const svg = `<svg width="${W}" height="${H}" style="position:absolute;top:0;left:0">
     <rect width="${W}" height="${H}" fill="transparent"/>
     ${edges.map(e=>{
       const s=nodeMap[e.source],t=nodeMap[e.target];
       if(!s||!t)return'';
-      return`<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="#dde0ed" stroke-width="1.2"/>`;
+      const col = relColors[e.relation] || '#dde0ed';
+      return`<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="${col}" stroke-width="1.4"/>`;
     }).join('')}
     ${Object.values(nodeMap).map(n=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}'>
       <circle cx="${n.x}" cy="${n.y}" r="${Math.max(1,Math.min(12,4+n.id.length*0.5)+5)}" fill="${colors[n.type]||'#999'}" opacity=".85" stroke="white" stroke-width="2"/>
     </a>`).join('')}
     ${Object.values(nodeMap).map(n=>`<text x="${n.x}" y="${n.y+22}" text-anchor="middle" font-size="11" fill="#333" font-family="system-ui" style="pointer-events:none">${ESC(n.label.slice(0,8))}</text>`).join('')}
   </svg>`;
-  box.innerHTML = svg;
+  // 关系类型图例
+  const legendTypes = (typeof RELATION_TYPES !== 'undefined') ? RELATION_TYPES.filter(t => t.value !== '相关') : [];
+  const legend = legendTypes.map(t =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:11px;color:var(--muted)"><span style="width:12px;height:3px;background:${t.color};display:inline-block;border-radius:2px"></span>${t.label}</span>`
+  ).join('');
+  box.innerHTML = svg + (legend ? `<div class="graph-legend">${legend}</div>` : '');
 }

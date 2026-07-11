@@ -13,6 +13,8 @@ const _ACTION_NAMES = [
   'showConceptPage', 'navigate', 'goBack', 'openDetail', 'pushHistory',
   // 标签 / 领域
   'viewTagItems', 'renameTag', 'deleteTag', 'closeModal', 'closeModalThenOpenDetail',
+  // 概念关系
+  'openRelationEditor', 'addRelationRow', 'removeRelationRow', 'saveConceptRelations',
   // 笔记（书/视频/帖子）
   'showAddNoteModal', 'toggleBooks', 'selectBook', 'loadNoteContent', 'toggleChapters',
   'toggleNoteManualSort', 'loadChapterFirst', 'triggerImageUpload', 'cancelNoteEdit',

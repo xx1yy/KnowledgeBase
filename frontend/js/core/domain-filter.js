@@ -51,8 +51,9 @@ async function initDomainFilter(){
     if(!root.contains(e.target)) pop.style.display = 'none';
   });
 
-  function applySelection(){
-    const checked = [...list.querySelectorAll('.df-item:checked')].map(cb => cb.value);
+  function syncFromChecks(){
+    const items = [...list.querySelectorAll('.df-item')];
+    const checked = items.filter(cb => cb.checked).map(cb => cb.value);
     if(checked.length === 0){
       all.checked = true;
       currentDomain = '';
@@ -66,6 +67,17 @@ async function initDomainFilter(){
     if(typeof navigate === 'function') navigate(currentView, {push:false});
   }
 
-  all.addEventListener('change', applySelection);
-  list.querySelectorAll('.df-item').forEach(cb => cb.addEventListener('change', applySelection));
+  // “全部领域”与各项互斥：勾选它即清空各项；取消它且未选任何项则回弹
+  all.addEventListener('change', () => {
+    if(all.checked){
+      list.querySelectorAll('.df-item').forEach(cb => cb.checked = false);
+    } else if([...list.querySelectorAll('.df-item:checked')].length === 0){
+      all.checked = true;
+    }
+    syncFromChecks();
+  });
+  list.querySelectorAll('.df-item').forEach(cb => cb.addEventListener('change', () => {
+    if(cb.checked) all.checked = false;
+    syncFromChecks();
+  }));
 }

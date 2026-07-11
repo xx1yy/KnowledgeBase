@@ -11,7 +11,7 @@ from backend.config import VAULT_ROOT, TYPE_DIR, DIR_TYPE, log
 from backend.vault import (
     parse_frontmatter, list_md_files,
     item_from_file, search_items, get_graph_data,
-    get_frontmatter, get_links, invalidate_frontmatter,
+    get_frontmatter, get_links, invalidate_frontmatter, _link_target_name,
 )
 from backend.templates import _build_frontmatter
 
@@ -232,18 +232,26 @@ class QueryMixin:
             self._send_error('File not found', 404)
             return
         item = item_from_file(fp)
-        # 获取反向链接
+        # 获取反向链接（含正文 wikilink 与结构化 relations，relations 带类型）
         backlinks = []
         item_id = fp.stem
         for d in DIR_TYPE:
             for f in list_md_files(d):
                 if f.stem == item_id:
                     continue
-                links = get_links(f)
-                if any(item_id in l for l in links):
-                    bl = item_from_file(f)
-                    backlinks.append({'id': bl['id'], 'title': bl['title'],
-                                      'type': bl['type'], 'path': bl['path']})
+                other = item_from_file(f)
+                hit = None
+                if any(item_id in l for l in other.get('links', [])):
+                    hit = {'relation': '相关', 'relationNote': ''}
+                for rel in other.get('relations', []):
+                    if _link_target_name(rel.get('to', '')) == item_id:
+                        hit = {'relation': rel.get('type', '相关'),
+                               'relationNote': rel.get('note', '')}
+                if hit:
+                    backlinks.append({'id': other['id'], 'title': other['title'],
+                                      'type': other['type'], 'path': other['path'],
+                                      'relation': hit['relation'],
+                                      'relationNote': hit['relationNote']})
         item['backlinks'] = backlinks
         self._send_json(item)
 

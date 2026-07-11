@@ -7,6 +7,7 @@ rating: {{rating}}
 start_date: {{date}}
 finish_date: ""
 tags: {{tag_str}}
+domain: ""
 created: "{{now}}"
 updated: "{{now}}"
 ---

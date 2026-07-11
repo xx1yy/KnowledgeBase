@@ -6,6 +6,7 @@ url: "{{url}}"
 platform: ""
 status: {{status}}
 tags: {{tag_str}}
+domain: ""
 concepts: []
 created: "{{now}}"
 updated: "{{now}}"
