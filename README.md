@@ -103,7 +103,9 @@ python -m backend.server
 | | `js/views/graph.js` | 力导向知识图谱 SVG | api |
 | | `js/views/tags.js` | 标签云 + 复合动作辅助 | 无 |
 | | `js/views/domains.js` | 领域 MOC 枢纽 + 弹窗展示 | 无 |
-| **Notes** | `js/notes/note.js` | 书籍/视频笔记列表、章节栏、排序(3种)、拖拽排序、阅读/编辑模式 | api, utils, markdown |
+| **Notes** | `js/notes/list.js` | 共享状态 + 书籍/视频/帖子笔记列表 + 内容加载(loadNoteContent) + 视频封面 | api, utils, markdown |
+| | `js/notes/chapters.js` | 章节栏(renderChapterBar/selectBook) + 3 种排序 + 拖拽排序(noteDrag*) | list, api |
+| | `js/notes/editor.js` | 在线编辑(toggleNoteEdit/cancelNoteEdit/saveNoteContent) | list, api |
 | | `js/notes/concept-detail.js` | 概念查看(主区分栏)/编辑表单/保存/最近概念缓存/来源加载 | api, markdown |
 | | `js/notes/extract-concept.js` | 提取概念 UI（输入框+保存+右栏操作） | api, markdown |
 | | `js/notes/image-upload.js` | 图片上传管线（按钮选图 + 粘贴截图自动上传） | api |

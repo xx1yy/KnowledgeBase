@@ -9,8 +9,9 @@ import urllib.parse
 
 from backend.config import VAULT_ROOT, TYPE_DIR, DIR_TYPE, log
 from backend.vault import (
-    parse_frontmatter, extract_wikilinks, list_md_files,
+    parse_frontmatter, list_md_files,
     item_from_file, search_items, get_graph_data,
+    get_frontmatter, get_links, invalidate_frontmatter,
 )
 from backend.templates import _build_frontmatter
 
@@ -42,7 +43,7 @@ class QueryMixin:
                 note_type = t + '-notes'
                 for f in files:
                     try:
-                        fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
+                        fm, _ = get_frontmatter(f)
                         ftype = fm.get('type', t)
                         if ftype == t:
                             hub_files.append(f)
@@ -68,7 +69,7 @@ class QueryMixin:
         for d in DIR_TYPE:
             for f in list_md_files(d):
                 try:
-                    fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
+                    fm, _ = get_frontmatter(f)
                     tags = fm.get('tags', [])
                     if not isinstance(tags, list):
                         if isinstance(tags, str) and tags:
@@ -88,7 +89,7 @@ class QueryMixin:
         for d in DIR_TYPE:
             for f in list_md_files(d):
                 try:
-                    fm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
+                    fm, _ = get_frontmatter(f)
                     dom = fm.get('domain', '')
                     if isinstance(dom, str) and dom:
                         for dn in re.split(r'[,，、]', dom):
@@ -113,7 +114,7 @@ class QueryMixin:
     def _handle_items(self, params):
         item_type = params.get('type', [''])[0]
         if not item_type or item_type not in TYPE_DIR:
-            self._send_json({'error': 'Invalid type'}, 400)
+            self._send_error('Invalid type', 400)
             return
         d = TYPE_DIR[item_type]
         items = [item_from_file(f) for f in list_md_files(d)]
@@ -174,11 +175,11 @@ class QueryMixin:
     def _handle_get_item(self, params):
         file_path = urllib.parse.unquote(params.get('path', [''])[0])
         if not file_path:
-            self._send_json({'error': 'Missing path'}, 400)
+            self._send_error('Missing path', 400)
             return
         fp = VAULT_ROOT / file_path
         if not fp.exists() or not fp.is_file():
-            self._send_json({'error': 'File not found'}, 404)
+            self._send_error('File not found', 404)
             return
         item = item_from_file(fp)
         # 获取反向链接
@@ -188,7 +189,7 @@ class QueryMixin:
             for f in list_md_files(d):
                 if f.stem == item_id:
                     continue
-                links = extract_wikilinks(f.read_text(encoding='utf-8'))
+                links = get_links(f)
                 if any(item_id in l for l in links):
                     bl = item_from_file(f)
                     backlinks.append({'id': bl['id'], 'title': bl['title'],
@@ -205,7 +206,7 @@ class QueryMixin:
         old = (data.get('from') or '').strip()
         new = (data.get('to') or '').strip()
         if not old:
-            self._send_json({'error': 'Missing from'}, 400)
+            self._send_error('Missing from', 400)
             return
         if old == new:
             self._send_json({'changed': 0})
@@ -214,11 +215,7 @@ class QueryMixin:
         for d in DIR_TYPE:
             for f in list_md_files(d):
                 try:
-                    old_text = f.read_text(encoding='utf-8')
-                except Exception:
-                    continue
-                try:
-                    fm, content, _ = parse_frontmatter(old_text)
+                    fm, content = get_frontmatter(f)
                 except Exception:
                     continue
                 tags = fm.get('tags', [])
@@ -239,5 +236,6 @@ class QueryMixin:
                     f.write_text(new_text, encoding='utf-8')
                 except Exception:
                     continue
+                invalidate_frontmatter(f)
                 changed += 1
         self._send_json({'changed': changed})

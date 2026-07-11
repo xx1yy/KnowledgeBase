@@ -74,7 +74,7 @@ class CrudMixin:
         data = self._read_body()
         item_type = data.get('type', 'quicknote')
         if item_type not in TYPE_DIR:
-            self._send_json({'error': 'Invalid type'}, 400)
+            self._send_error('Invalid type', 400)
             return
         if item_type in ('book', 'video', 'post'):
             filepath = self._create_parent_with_notes(item_type, data)
@@ -92,11 +92,11 @@ class CrudMixin:
         data = self._read_body()
         file_path = urllib.parse.unquote(data.get('path', ''))
         if not file_path:
-            self._send_json({'error': 'Missing path'}, 400)
+            self._send_error('Missing path', 400)
             return
         fp = VAULT_ROOT / file_path
         if not fp.exists():
-            self._send_json({'error': 'File not found'}, 404)
+            self._send_error('File not found', 404)
             return
         old_text = fp.read_text(encoding='utf-8')
         fm, content, raw_fm = parse_frontmatter(old_text)
@@ -146,11 +146,11 @@ class CrudMixin:
     def _handle_delete_item(self, params):
         file_path = urllib.parse.unquote(params.get('path', [''])[0])
         if not file_path:
-            self._send_json({'error': 'Missing path'}, 400)
+            self._send_error('Missing path', 400)
             return
         fp = VAULT_ROOT / file_path
         if not fp.exists():
-            self._send_json({'error': 'File not found'}, 404)
+            self._send_error('File not found', 404)
             return
         trash = VAULT_ROOT / '.trash'
         trash.mkdir(exist_ok=True)
@@ -171,14 +171,14 @@ class CrudMixin:
     def _handle_upload(self):
         length = int(self.headers.get('Content-Length', 0))
         if length == 0:
-            self._send_json({'error': 'Empty body'}, 400)
+            self._send_error('Empty body', 400)
             return
         try:
             raw = self.rfile.read(length)
             import json as _json
             data = _json.loads(raw.decode('utf-8'))
         except Exception:
-            self._send_json({'error': 'Bad JSON'}, 400)
+            self._send_error('Bad JSON', 400)
             return
         filename = (data.get('filename') or 'image.png').strip()
         content = data.get('content') or ''
@@ -188,10 +188,10 @@ class CrudMixin:
         try:
             raw_bytes = base64.b64decode(content)
         except Exception:
-            self._send_json({'error': 'Invalid base64'}, 400)
+            self._send_error('Invalid base64', 400)
             return
         if not raw_bytes:
-            self._send_json({'error': 'Empty file'}, 400)
+            self._send_error('Empty file', 400)
             return
         name = sanitize_filename(filename) or 'image.png'
         att_dir = VAULT_ROOT / '附件'
@@ -205,7 +205,7 @@ class CrudMixin:
         try:
             fp.write_bytes(raw_bytes)
         except Exception as e:
-            self._send_json({'error': 'Write failed: ' + str(e)}, 500)
+            self._send_error('Write failed: ' + str(e), 500)
             return
         rel = f"附件/{name}"
         self._send_json({'url': '/api/file/' + urllib.parse.quote(rel), 'path': rel}, 201)
@@ -215,14 +215,14 @@ class CrudMixin:
         data = self._read_body()
         file_path = urllib.parse.unquote(data.get('path', ''))
         if not file_path:
-            return self._send_json({'error': 'Missing path'}, 400)
+            return self._send_error('Missing path', 400)
         fp = VAULT_ROOT / file_path
         if not fp.exists():
-            return self._send_json({'error': 'File not found'}, 404)
+            return self._send_error('File not found', 404)
         old_text = fp.read_text(encoding='utf-8')
         fm, content, raw_fm = parse_frontmatter(old_text)
         if fm.get('type') != 'plan' or fm.get('plan_type') != 'habit':
-            return self._send_json({'error': 'Not a habit item'}, 400)
+            return self._send_error('Not a habit item', 400)
         today = time.strftime('%Y-%m-%d')
         last_checkin = fm.get('last_checkin', '')
         if last_checkin == today:
@@ -251,4 +251,4 @@ class CrudMixin:
             fp.write_text(new_text, encoding='utf-8')
             self._send_json({'ok': True, 'streak': streak, 'best_streak': best_streak, 'last_checkin': today})
         except Exception as e:
-            self._send_json({'error': 'Write failed: ' + str(e)}, 500)
+            self._send_error('Write failed: ' + str(e), 500)

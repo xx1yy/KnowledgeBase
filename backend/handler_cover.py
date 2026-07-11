@@ -119,7 +119,7 @@ class CoverMixin:
     def _handle_cover(self, params):
         url = urllib.parse.unquote(params.get('url', [''])[0]).strip()
         if not url:
-            self._send_json({'error': 'Missing url'}, 400)
+            self._send_error('Missing url', 400)
             return
         # 内存缓存，避免重复请求触发风控
         if url in COVER_CACHE:
@@ -143,18 +143,18 @@ class CoverMixin:
     def _handle_book_cover_upload(self):
         length = int(self.headers.get('Content-Length', 0))
         if length == 0:
-            self._send_json({'error': 'Empty body'}, 400)
+            self._send_error('Empty body', 400)
             return
         try:
             raw = self.rfile.read(length)
             data = json.loads(raw.decode('utf-8'))
         except Exception:
-            self._send_json({'error': 'Bad JSON'}, 400)
+            self._send_error('Bad JSON', 400)
             return
         book_path = (data.get('path') or '').strip()
         content = data.get('content') or ''
         if not book_path or not content:
-            self._send_json({'error': 'Missing path or content'}, 400)
+            self._send_error('Missing path or content', 400)
             return
         # 兼容 data:image/png;base64,xxxx 与纯 base64
         if ',' in content:
@@ -166,14 +166,14 @@ class CoverMixin:
         try:
             raw_bytes = base64.b64decode(b64_part)
         except Exception:
-            self._send_json({'error': 'Invalid base64'}, 400)
+            self._send_error('Invalid base64', 400)
             return
         if len(raw_bytes) > 2 * 1024 * 1024:  # 解码后不超过 2MB
-            self._send_json({'error': '图片太大（最大2MB）'}, 400)
+            self._send_error('图片太大（最大2MB）', 400)
             return
         fp = VAULT_ROOT / book_path
         if not fp.exists():
-            self._send_json({'error': 'Book file not found'}, 404)
+            self._send_error('Book file not found', 404)
             return
         # 直接把完整 data URI 写入 frontmatter 的 cover 字段
         data_uri = mime_prefix + ',' + b64_part
@@ -186,7 +186,7 @@ class CoverMixin:
             new_text = f'---\n{new_fm_str}\n---\n{body_content}'
             fp.write_text(new_text, encoding='utf-8')
         except Exception as e:
-            self._send_json({'error': '写入文件失败: ' + str(e)}, 500)
+            self._send_error('写入文件失败: ' + str(e), 500)
             return
         self._send_json({
             'ok': True,
@@ -199,11 +199,11 @@ class CoverMixin:
         data = self._read_body()
         fp = (data.get('path') or '').strip()
         if not fp:
-            self._send_json({'error': 'Missing path'}, 400)
+            self._send_error('Missing path', 400)
             return
         filepath = VAULT_ROOT / fp
         if not filepath.exists() or not filepath.is_file():
-            self._send_json({'error': 'File not found'}, 404)
+            self._send_error('File not found', 404)
             return
         self._embed_bilibili_cover_datauri(filepath)
         try:

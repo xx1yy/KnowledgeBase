@@ -132,9 +132,30 @@ class Handler(StaticMixin, QueryMixin, CoverMixin, CrudMixin, http.server.BaseHT
     def do_OPTIONS(self):
         self._send_json({}, 204)
 
-    # ── GET 路由（认证网关 + 分发） ─────────────────────
-    def do_GET(self):
+    # ── 异常处理统一包装 ───────────────────────────────
+    def _run_safe(self, body):
+        """统一包裹 do_* 方法体：捕获异常、打印堆栈、返回 500。"""
         try:
+            body()
+        except Exception as e:
+            traceback.print_exc()
+            try:
+                self.send_error(500, str(e))
+            except Exception:
+                pass
+
+    def _mutating_dispatch(self, routes):
+        """POST / PUT / DELETE 共用主体：认证 → 路由分发 → 404。"""
+        if not self._check_auth():
+            self.send_error(401, 'Unauthorized')
+            return
+        if self._dispatch(routes):
+            return
+        self.send_error(404)
+
+    # ── GET 路由（认证网关 + 静态兜底 + 分发） ──────────
+    def do_GET(self):
+        def _body():
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
 
@@ -153,55 +174,19 @@ class Handler(StaticMixin, QueryMixin, CoverMixin, CrudMixin, http.server.BaseHT
                 return
 
             self.send_error(404, 'Not Found')
-        except Exception as e:
-            traceback.print_exc()
-            try:
-                self.send_error(500, str(e))
-            except Exception:
-                pass
+        self._run_safe(_body)
 
     # ── POST / PUT / DELETE 路由 ────────────────────────
     def do_POST(self):
-        try:
-            if not self._check_auth():
-                self.send_error(401, 'Unauthorized')
-                return
-            if self._dispatch(POST_ROUTES):
-                return
-            self.send_error(404)
-        except Exception as e:
-            traceback.print_exc()
-            try:
-                self.send_error(500, str(e))
-            except Exception:
-                pass
+        self._run_safe(lambda: self._mutating_dispatch(POST_ROUTES))
 
     def do_PUT(self):
-        try:
-            if not self._check_auth():
-                self.send_error(401, 'Unauthorized')
-                return
-            if self._dispatch(PUT_ROUTES):
-                return
-            self.send_error(404)
-        except Exception as e:
-            traceback.print_exc()
-            try:
-                self.send_error(500, str(e))
-            except Exception:
-                pass
+        self._run_safe(lambda: self._mutating_dispatch(PUT_ROUTES))
 
     def do_DELETE(self):
-        try:
-            if not self._check_auth():
-                self.send_error(401, 'Unauthorized')
-                return
-            if self._dispatch(DELETE_ROUTES):
-                return
-            self.send_error(404)
-        except Exception as e:
-            traceback.print_exc()
-            try:
-                self.send_error(500, str(e))
-            except Exception:
-                pass
+        self._run_safe(lambda: self._mutating_dispatch(DELETE_ROUTES))
+
+    # ── 统一错误响应 ───────────────────────────────────
+    def _send_error(self, message, status=400):
+        """统一错误响应体：{'ok': False, 'error': message}。"""
+        self._send_json({'ok': False, 'error': message}, status)
