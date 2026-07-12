@@ -102,12 +102,16 @@ function showBookCover(it){
   const coverUrl = it.cover || '';
   if(coverUrl){
     img.src = coverUrl;
-    wrap.style.display = 'block';
+    img.style.display = 'block';
+  } else {
+    img.style.display = 'none';
   }
+  // 始终显示上传按钮（即使暂无封面也能上传）
+  wrap.style.display = 'block';
   // 在封面区域添加上传按钮
   const uploadBtn = document.createElement('button');
   uploadBtn.className = 'btn-g sm';
-  uploadBtn.textContent = '📁 更换封面';
+  uploadBtn.textContent = coverUrl ? '📁 更换封面' : '📁 上传封面';
   uploadBtn.style.cssText = 'margin-top:8px;font-size:12px';
   uploadBtn.setAttribute('data-action', 'uploadCover');
   uploadBtn.setAttribute('data-args', JSON.stringify([it.path]));
@@ -122,8 +126,12 @@ function showVideoCover(it){
   const coverUrl = it.cover || '';
   if(coverUrl){
     img.src = coverUrl;
-    wrap.style.display = 'block';
+    img.style.display = 'block';
+  } else {
+    img.style.display = 'none';
   }
+  // 始终显示上传按钮（即使暂无封面也能上传）
+  wrap.style.display = 'block';
   // 上传封面按钮
   const uploadBtn = document.createElement('button');
   uploadBtn.className = 'btn-g sm';

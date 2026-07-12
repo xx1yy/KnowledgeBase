@@ -219,7 +219,7 @@ async function loadVideoThumbs(){
 
 // ── 封面上传（书籍/视频通用，写入 cover 字段 data URI） ──
 async function uploadCover(itemPath){
-  const fp = decodeURIComponent(bookPath);
+  const fp = (itemPath || '').toString();
   // 创建隐藏的 file input
   const input = document.createElement('input');
   input.type = 'file';
@@ -233,8 +233,13 @@ async function uploadCover(itemPath){
       try{
         const r = await post('/book-cover-upload', {path: fp, content: reader.result});
         if(r.ok){
-          // 刷新当前书籍列表以显示新封面
-          renderList('book');
+          // 若在详情页查看该条目则就地刷新封面；否则刷新列表缩略图
+          if(currentView === 'detail'){
+            openDetail(fp, {push:false});
+          } else {
+            renderList('book');
+            renderList('video');
+          }
         } else {
           alert(r.error || '上传失败');
         }

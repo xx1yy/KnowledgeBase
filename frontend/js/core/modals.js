@@ -1,5 +1,8 @@
 // Modals — 所有弹窗（编辑、快速记录、新建笔记[统一 book/video]）
 
+// 防重复提交：创建类请求进行中时拦截同函数的二次调用（避免快速双击保存产生重复条目）
+let _creating = false;
+
 function closeModal(){ document.getElementById('modalMask').classList.remove('show') }
 
 // 点击遮罩层背景关闭弹窗（仅当点击目标是遮罩本身而非内部 modal）
@@ -165,6 +168,9 @@ function updateQCFields(){
 }
 
 async function saveQuickCapture(){
+  if(_creating) return;
+  _creating = true;
+  try{
   const t = document.getElementById('qc_type').value;
   const title = document.getElementById('qc_title').value.trim();
   if(!title) return alert('请输入标题');
@@ -185,6 +191,7 @@ async function saveQuickCapture(){
   closeModal();
   await loadDashboard();
   navigate(t, {push:false});
+  } finally { _creating = false; }
 }
 
 // ── 新建笔记弹窗（统一：文学笔记 / 视频笔记）──
@@ -352,6 +359,9 @@ function updateChapterSuggestions(){
 }
 
 async function saveNewNote(noteType){
+  if(_creating) return;
+  _creating = true;
+  try{
   const cfg = NOTE_MODAL_CONFIG[noteType] || NOTE_MODAL_CONFIG.book;
   const sel = document.getElementById(cfg.selectId);
   let parent = '';
@@ -391,6 +401,9 @@ async function saveNewNote(noteType){
     }
   }catch(e){
     alert('创建失败：' + e.message);
+  }
+  } finally {
+    _creating = false;
   }
 }
 

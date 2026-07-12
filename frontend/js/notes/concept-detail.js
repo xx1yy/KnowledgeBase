@@ -89,12 +89,12 @@ function cleanConceptContent(raw){
 }
 
 function conceptViewHtml(it, fp){
-  const def = it.definition ? `<div class="extract-step">一句话定义</div><div class="extract-read">${ESC(it.definition)}</div>` : '';
+  const def = it.definition ? `<div class="extract-step">一句话定义</div><div class="extract-read">${renderNoteContent(it.definition)}</div>` : '';
   // content 只取核心解释段，截断后续段落避免与 how_to_use/excerpt 重复
   const safeContent = cleanConceptContent(it.content);
   const content = safeContent ? `<div class="extract-step">核心解释</div><div class="extract-read">${renderNoteContent(safeContent)}</div>` : '';
-  const how = it.how_to_use ? `<div class="extract-step">怎么用</div><div class="extract-read">${ESC(it.how_to_use)}</div>` : '';
-  const excerpt = it.excerpt ? `<div class="extract-step">原文摘录</div><blockquote class="md-quote">${ESC(it.excerpt)}</blockquote>` : '';
+  const how = it.how_to_use ? `<div class="extract-step">怎么用</div><div class="extract-read">${renderNoteContent(it.how_to_use)}</div>` : '';
+  const excerpt = it.excerpt ? `<div class="extract-step">原文摘录</div><blockquote class="md-quote">${renderNoteContent(it.excerpt)}</blockquote>` : '';
   const tags = (it.tags&&it.tags.length) ? `<div class="extract-step">标签</div><div>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>` : '';
   const domain = it.domain ? `<div class="extract-step">领域</div><div class="extract-read">${ESC(it.domain)}</div>` : '';
   const relSec = renderRelationsHtml(it);

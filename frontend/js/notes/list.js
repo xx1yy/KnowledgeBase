@@ -170,8 +170,21 @@ async function renderBookNotes(){
   let books = [];
   try{ books = await get('/items?type=book'); }catch(e){}
   books = books.filter(b => b.type === 'book');
-  window._bookList = books;
+  window._bookList = books;   // 全量：供「新建笔记」选父级用，不过滤领域
   window._allBookNotes = notes;
+
+  // 顶栏选了领域时，父级书籍栏也要按领域过滤（与笔记继承领域逻辑一致）。
+  // 注意：window._bookList 保持全量（modals 选父级需要），这里单独算展示用列表。
+  const _dset = (typeof currentDomain === 'string' && currentDomain)
+    ? new Set(currentDomain.split(/[,，、;；]/).map(s => s.trim()).filter(Boolean))
+    : null;
+  const _matchDomain = (domStr) => {
+    if(!_dset) return true;
+    if(!domStr) return false;
+    const toks = new Set(String(domStr).split(/[,，、;；]/).map(s => s.trim()).filter(Boolean));
+    return [...toks].some(t => _dset.has(t));
+  };
+  const displayBooks = books.filter(b => _matchDomain(b.domain));
 
   if(!notes.length){
     document.getElementById('content').innerHTML = `<div class="empty"><div class="big">📝</div>还没有文学笔记<br><span style="font-size:12px;color:var(--faint);margin-bottom:16px;display:block">添加书籍时会自动创建，也可以手动新建</span><button class="btn-p" data-action="showAddNoteModal" data-args='["book"]'>＋ 新建文学笔记</button></div>`;
@@ -187,16 +200,16 @@ async function renderBookNotes(){
   });
   window._bookNotesByFolder = byFolder;
 
-  const bookFolders = new Set(books.map(b => b.path.split('/').slice(-2, -1)[0]));
+  const bookFolders = new Set(displayBooks.map(b => b.path.split('/').slice(-2, -1)[0]));
   const folderTitles = {};
-  books.forEach(b => { folderTitles[b.path.split('/').slice(-2, -1)[0]] = b.title; });
+  books.forEach(b => { folderTitles[b.path.split('/').slice(-2, -1)[0]] = b.title; });  // 标题用全量，避免漏标题
   const orphanFolders = Object.keys(byFolder).filter(f => !bookFolders.has(f));
-  orphanFolders.forEach(f => { folderTitles[f] = '未归类'; });
+  orphanFolders.forEach(f => { folderTitles[f] = folderTitles[f] || '未归类'; });
   window._bookFolderTitles = folderTitles;
 
   const entries = [
-    ...books.map(b => ({folder: b.path.split('/').slice(-2, -1)[0], title: b.title})),
-    ...orphanFolders.map(f => ({folder: f, title: '未归类'}))
+    ...displayBooks.map(b => ({folder: b.path.split('/').slice(-2, -1)[0], title: b.title})),
+    ...orphanFolders.map(f => ({folder: f, title: folderTitles[f] || '未归类'}))
   ];
 
   document.getElementById('content').innerHTML = `

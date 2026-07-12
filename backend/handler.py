@@ -3,11 +3,12 @@
 """HTTP 请求处理 —— 瘦核心。
 
 职责边界：
-  handler.py    仅含「传输层 + 认证 + 路由分发 + 路由表」
-  handler_static.py  静态/文件服务（StaticMixin）
-  handler_query.py   查询统计（QueryMixin）
-  handler_cover.py   封面系统（CoverMixin）
-  handler_crud.py    增删改/上传/打卡（CrudMixin）
+  handler.py          仅含「传输层 + 认证 + 路由分发 + 路由表」
+  handlers/static.py  静态/文件服务（StaticMixin）
+  handlers/query.py   查询统计（QueryMixin）
+  handlers/cover.py   封面系统（CoverMixin）
+  handlers/crud.py    增删改/上传/打卡（CrudMixin）
+  vault/               数据操作层（parser / cache / graph）
 
 所有业务方法都通过 Mixin 提供，由 Handler 组合。方法名、路由表、
 self.xxx() 调用方式完全不变，行为零改变。
@@ -20,10 +21,10 @@ import traceback
 import urllib.parse
 
 from backend.config import VAULT_ROOT, TYPE_DIR, log, AUTH_TOKEN
-from backend.handler_static import StaticMixin
-from backend.handler_query import QueryMixin
-from backend.handler_cover import CoverMixin
-from backend.handler_crud import CrudMixin
+from backend.handlers.static import StaticMixin
+from backend.handlers.query import QueryMixin
+from backend.handlers.cover import CoverMixin
+from backend.handlers.crud import CrudMixin
 
 # ── 路由表 ──────────────────────────────────────────────
 # 每条路由：(pattern, kind, handler_attr, call_kind)
@@ -65,9 +66,12 @@ DELETE_ROUTES = [
 ]
 
 
-class KBServer(http.server.HTTPServer):
-    # Windows 上关闭 SO_REUSEADDR 以避免端口探测循环失效
-    allow_reuse_address = False
+class KBServer(http.server.ThreadingHTTPServer):
+    # 多线程：单个请求/半开连接（浏览器预连接、网络抖动）卡顿只阻塞其自身线程，
+    # 不再拖垮整站（单线程 HTTPServer 易被一个挂起连接拖垮，导致所有 API 超时、整页无法使用）。
+    # daemon_threads=True 让工作线程随主进程退出，避免线程泄漏。
+    daemon_threads = True
+    allow_reuse_address = True
 
 
 class Handler(StaticMixin, QueryMixin, CoverMixin, CrudMixin, http.server.BaseHTTPRequestHandler):

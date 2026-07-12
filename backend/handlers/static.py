@@ -8,6 +8,9 @@ from pathlib import Path
 
 from backend.config import VAULT_ROOT, FRONTEND_FILE, AUTH_TOKEN
 
+# 前端静态资源根目录（与 FRONTEND_FILE 同级）
+_FRONTEND_ROOT = FRONTEND_FILE.parent
+
 
 class StaticMixin:
     """静态/文件服务与公开端点。依赖宿主类提供 _send_json / send_* / wfile。"""
@@ -33,7 +36,7 @@ class StaticMixin:
 
     def _serve_static(self, path):
         """尝试从项目根目录提供静态文件。"""
-        root = Path(__file__).parent.parent / "frontend"
+        root = _FRONTEND_ROOT
         # 防止目录遍历攻击
         clean_path = path.lstrip('/')
         if '..' in clean_path or '~' in clean_path:

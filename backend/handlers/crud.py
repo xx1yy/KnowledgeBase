@@ -37,12 +37,28 @@ class CrudMixin:
         return fp
 
     def _create_parent_with_notes(self, item_type, data):
-        """book/video/post：建同名子目录→写枢纽页→自动建笔记，返回枢纽页路径"""
+        """book/video/post：建同名子目录→写枢纽页→自动建笔记，返回枢纽页路径。
+
+        幂等保护：若同名子目录内已存在同类型枢纽页（如双提交/重复点击导致二次
+        创建），直接复用该枢纽页，不再写入第二份，避免同一文件夹出现两个条目。"""
         title = sanitize_filename(data.get('title', '未命名'))
         sub_dir = VAULT_ROOT / TYPE_DIR[item_type] / title
         sub_dir.mkdir(parents=True, exist_ok=True)
-        hub_fp = self._unique_filepath(sub_dir, title)
-        hub_fp.write_text(generate_md(item_type, data), encoding='utf-8')
+        # 防重复：子目录内已存在同类型枢纽页则复用，不写第二份
+        existing_hub = None
+        for f in sub_dir.glob('*.md'):
+            try:
+                ffm, _, _ = parse_frontmatter(f.read_text(encoding='utf-8'))
+            except Exception:
+                continue
+            if ffm.get('type') == item_type:
+                existing_hub = f
+                break
+        if existing_hub:
+            hub_fp = existing_hub
+        else:
+            hub_fp = self._unique_filepath(sub_dir, title)
+            hub_fp.write_text(generate_md(item_type, data), encoding='utf-8')
         # 自动生成配套笔记（文学/视频/帖子笔记）
         suffix = _NOTE_SUFFIX[item_type]
         notes_title = f'{title}-{suffix}'
