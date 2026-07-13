@@ -179,9 +179,35 @@ body.sidebar-collapsed .nav-item{padding:9px 0;justify-content:center;gap:0}
 .detail-links a{font-size:12.5px;color:var(--accent);text-decoration:none;font-weight:500}
 .detail-links a:hover{text-decoration:underline}
 
-.graph-container{width:100%;height:500px;position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.graph-container{width:100%;height:min(760px,calc(100vh - 130px));position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .graph-container canvas{width:100%;height:100%}
-.graph-legend{position:absolute;left:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px}
+/* 图例：单容器底栏，左=关系线色，右=节点图标 */
+.graph-legend{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;align-items:flex-end;justify-content:space-between;padding:6px 12px;background:rgba(255,255,255,.92);border-top:1px solid var(--border);pointer-events:none;font-size:11px;gap:12px}
+.lg-section{display:flex;flex-direction:column;gap:2px;max-width:52%}
+.lg-section-typ{align-items:flex-end;text-align:right}
+.lg-title{font-size:10px;font-weight:600;color:var(--muted);margin-bottom:1px}
+.lg-row{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.lg-section-typ .lg-row{justify-content:flex-end}
+.lg-item{display:inline-flex;align-items:center;gap:4px;color:var(--text);white-space:nowrap}
+.lg-ico{font-size:12px;line-height:1}
+.lg-line{display:inline-block;width:20px;height:4px;border-radius:2px;vertical-align:middle}
+.graph-toolbar{position:absolute;top:10px;left:10px;right:10px;z-index:6;display:flex;align-items:center;gap:8px;pointer-events:none}
+.graph-toolbar .gbtn{pointer-events:auto;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);padding:4px 10px;font-size:12px;line-height:1.4;transition:background .15s,border-color .15s}
+.graph-toolbar .gbtn:hover{background:var(--accent-soft,var(--accent));border-color:var(--accent);color:#fff}
+.graph-hint{pointer-events:none;font-size:11px;color:var(--muted);margin-left:4px}
+/* 类型过滤条 */
+.graph-filters{position:absolute;top:44px;right:10px;z-index:6;display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;max-width:62%}
+.gchip{display:inline-flex;align-items:center;gap:3px;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:2px 9px;font-size:11px;line-height:1.5;transition:opacity .15s,background .15s,border-color .15s;font-family:inherit}
+.gchip .gchip-ico{font-size:12px;line-height:1}
+.gchip:hover{border-color:var(--accent)}
+.gchip.off{opacity:.4;text-decoration:line-through;background:var(--bg)}
+.graph-svg{position:absolute;top:0;left:0;width:100%;height:100%;cursor:grab;touch-action:none}
+.graph-svg.panning{cursor:grabbing}
+.graph-node{cursor:grab}
+.graph-node.dragging{cursor:grabbing}
+.graph-node circle{transition:fill-opacity .15s}
+.graph-node:hover circle{fill-opacity:1}
+.graph-node-ico{paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;pointer-events:none;user-select:none}
 
 .notes-layout{display:flex;gap:14px;height:calc(100vh - 100px)}
 .notes-sidebar{width:200px;flex-shrink:0;overflow-y:auto;padding-right:2px}

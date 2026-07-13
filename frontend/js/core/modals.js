@@ -2,16 +2,33 @@
 
 // 防重复提交：创建类请求进行中时拦截同函数的二次调用（避免快速双击保存产生重复条目）
 let _creating = false;
+let _editDirty = false;   // 编辑弹窗是否有未保存修改（点遮罩/×/Esc 关闭前需确认）
 
-function closeModal(){ document.getElementById('modalMask').classList.remove('show') }
+function closeModal(){
+  // 未保存修改保护：编辑弹窗有改动时，点遮罩/×/Esc 关闭前必须确认，避免误关丢失内容
+  if(_editDirty){
+    if(!confirm('有未保存的修改，确定要关闭并丢弃吗？')) return;
+  }
+  _editDirty = false;
+  document.getElementById('modalMask').classList.remove('show');
+}
 
 // 点击遮罩层背景关闭弹窗（仅当点击目标是遮罩本身而非内部 modal）
 function closeModalOnMask(){
   closeModal();
 }
 
+// Esc 关闭弹窗（同样受未保存修改保护）
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){
+    const mask = document.getElementById('modalMask');
+    if(mask && mask.classList.contains('show')) closeModal();
+  }
+});
+
 // ── 编辑条目弹窗 ──
 async function openEdit(filepath){
+  _editDirty = false;   // 新开编辑弹窗：重置未保存标记
   const fp = decodeURIComponent(filepath);
   const it = await get(`/item?path=${encodeURIComponent(fp)}`);
   const html = `<div class="modal-head"><h3>编辑 ${ESC(it.title)}</h3><button class="modal-close" data-action="closeModal" data-args='[]'>×</button></div>
@@ -68,6 +85,12 @@ async function openEdit(filepath){
       }
     });
   }
+
+  // 未保存修改追踪：编辑弹窗内任何字段变动都标记 dirty，关闭时（遮罩/×/Esc）弹确认
+  document.getElementById('modal').querySelectorAll('input,textarea,select').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ _editDirty = true; });
+    inp.addEventListener('change', ()=>{ _editDirty = true; });
+  });
 }
 
 async function saveEdit(filepath){
@@ -119,6 +142,7 @@ async function saveEdit(filepath){
   const tagEl = document.getElementById('f_tags');
   if(tagEl) data.tags = tagEl.value.split(/[,，、]/).map(s=>s.trim()).filter(Boolean);
   await put('/item', {path: fp, ...data});
+  _editDirty = false;   // 已保存，关闭时不再弹确认
   closeModal();
   await loadDashboard();
   clearRecentConceptsCache();
