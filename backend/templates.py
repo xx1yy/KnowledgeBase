@@ -104,6 +104,15 @@ def concept_display_body(title, definition, source, excerpt, content, how_to_use
     return _substitute(_load_template('concept-body'), ctx)
 
 
+def _esc_str(s):
+    """转义 frontmatter 标量/列表项的特殊字符（反斜杠、双引号），保证可安全往返解析。
+
+    与 parser.parse_frontmatter 的 unescape 对称：写入时转义，读出时还原。
+    不转义会破坏含引号的内容（如关系备注「他说"你好"」）导致数据丢失。
+    """
+    return str(s).replace('\\', '\\\\').replace('"', '\\"')
+
+
 def _build_frontmatter(fm):
     """将 frontmatter 字典序列化为 YAML 格式字符串"""
     lines = []
@@ -115,19 +124,19 @@ def _build_frontmatter(fm):
                 # 关系等「字典列表」→ 扁平字符串列表，每条 'to|type|note'。
                 # 采用扁平格式以兼容自定义 frontmatter 解析器（不支持嵌套映射）。
                 items = ', '.join(
-                    '"' + '|'.join(str(r.get(k, '') or '') for k in ('to', 'type', 'note')).replace('"', '\\"') + '"'
+                    '"' + '|'.join(_esc_str(r.get(kk, '') or '') for kk in ('to', 'type', 'note')) + '"'
                     for r in v
                 )
                 lines.append(f'{k}: [{items}]')
             else:
-                items = ', '.join(f'"{item}"' for item in v)
+                items = ', '.join(f'"{_esc_str(item)}"' for item in v)
                 lines.append(f'{k}: [{items}]')
         elif isinstance(v, bool):
             lines.append(f'{k}: {"true" if v else "false"}')
         elif v is None:
             lines.append(f'{k}:')
         elif isinstance(v, str):
-            lines.append(f'{k}: "{v}"')
+            lines.append(f'{k}: "{_esc_str(v)}"')
         else:
             lines.append(f'{k}: {v}')
     return '\n'.join(lines)

@@ -60,10 +60,6 @@ async function showConceptPage(filepath, opts){
   });
 
   reader.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <span class="type-badge type-concept">💡 ${ESC(parentName)}</span>
-      <span style="font-size:13px;font-weight:600;color:var(--muted)">💡 概念详情</span>
-    </div>
     <div class="extract-split" id="extractSplit">
       <div class="extract-split-left">
         <h1>${ESC(currentNoteData.title)}</h1>
@@ -89,22 +85,54 @@ function cleanConceptContent(raw){
 }
 
 function conceptViewHtml(it, fp){
-  const def = it.definition ? `<div class="extract-step">一句话定义</div><div class="extract-read">${renderNoteContent(it.definition)}</div>` : '';
+  const def = it.definition ? `
+    <div class="concept-def">
+      <div class="concept-def-label">一句话定义</div>
+      <div class="concept-def-text">${renderNoteContent(it.definition)}</div>
+    </div>` : '';
   // content 只取核心解释段，截断后续段落避免与 how_to_use/excerpt 重复
   const safeContent = cleanConceptContent(it.content);
-  const content = safeContent ? `<div class="extract-step">核心解释</div><div class="extract-read">${renderNoteContent(safeContent)}</div>` : '';
-  const how = it.how_to_use ? `<div class="extract-step">怎么用</div><div class="extract-read">${renderNoteContent(it.how_to_use)}</div>` : '';
-  const excerpt = it.excerpt ? `<div class="extract-step">原文摘录</div><blockquote class="md-quote">${renderNoteContent(it.excerpt)}</blockquote>` : '';
-  const tags = (it.tags&&it.tags.length) ? `<div class="extract-step">标签</div><div>${it.tags.map(t=>`<span class="tag">${ESC(t)}</span>`).join(' ')}</div>` : '';
-  const domain = it.domain ? `<div class="extract-step">领域</div><div class="extract-read">${ESC(it.domain)}</div>` : '';
+  const content = safeContent ? `
+    <section class="concept-field">
+      <div class="concept-field-h"><span class="cf-ico">📖</span>核心解释</div>
+      <div class="concept-field-body">${renderNoteContent(safeContent)}</div>
+    </section>` : '';
+  const how = it.how_to_use ? `
+    <section class="concept-field">
+      <div class="concept-field-h"><span class="cf-ico">🛠️</span>怎么用</div>
+      <div class="concept-field-body">${renderNoteContent(it.how_to_use)}</div>
+    </section>` : '';
+  const excerpt = it.excerpt ? `
+    <section class="concept-field">
+      <div class="concept-field-h"><span class="cf-ico">📑</span>原文摘录</div>
+      <blockquote class="concept-excerpt">${renderNoteContent(it.excerpt)}</blockquote>
+    </section>` : '';
+  const tags = (it.tags&&it.tags.length) ? `
+    <section class="concept-field">
+      <div class="concept-field-h"><span class="cf-ico">🏷️</span>标签</div>
+      <div class="concept-tags">${it.tags.map(t=>`<span class="concept-tag">${ESC(t)}</span>`).join('')}</div>
+    </section>` : '';
   const relSec = renderRelationsHtml(it);
+  const hero = `
+    <header class="concept-hero">
+      <div class="concept-hero-top">
+        <span class="type-badge type-concept">💡 概念</span>
+        <h1 class="concept-title">${ESC(it.title)}</h1>
+      </div>
+      <div class="concept-meta">
+        ${it.domain ? `<span class="concept-domain">${ESC(it.domain)}</span>` : ''}
+        ${it.source ? `<span>📚 来源：${ESC(it.source)}</span>` : ''}
+      </div>
+    </header>`;
   return `
-    <div style="margin-bottom:14px;padding:8px 12px;background:var(--asoft);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted)">
-      💡 概念：<strong style="color:var(--accent)">${ESC(it.title)}</strong>
-    </div>
-    ${def}${content}${how}${excerpt}${tags}${domain}${relSec}
-    <div class="extract-step">被以下笔记引用</div>
-    <div class="detail-links" id="conceptSources">加载中…</div>`;
+    <div class="concept-card">
+      ${hero}
+      ${def}${content}${how}${excerpt}${tags}${relSec}
+      <section class="concept-field">
+        <div class="concept-field-h"><span class="cf-ico">🔗</span>被以下笔记引用</div>
+        <div class="detail-links" id="conceptSources">加载中…</div>
+      </section>
+    </div>`;
 }
 
 // 概念关系区：按类型分组、配色、可点击跳转；附「管理关系」入口
@@ -116,25 +144,32 @@ function renderRelationsHtml(it){
     (byType[t] = byType[t] || []).push(r);
   });
   const types = Object.keys(byType);
+  const manage = `<button class="btn-g sm" data-action="openRelationEditor" data-args='${JSON.stringify([it.path])}' style="margin-top:8px">＋ 管理关系</button>`;
   if(!types.length){
-    return `<div class="extract-step">关系</div>
-      <div id="conceptRels"><span style="color:var(--faint)">暂无结构化关系</span></div>
-      <button class="btn-g sm" data-action="openRelationEditor" data-args='${JSON.stringify([it.path])}' style="margin-top:6px">＋ 管理关系</button>`;
+    return `<section class="concept-field">
+      <div class="concept-field-h"><span class="cf-ico">🔗</span>关系</div>
+      <div id="conceptRels"><span style="color:var(--faint);font-size:12.5px">暂无结构化关系</span></div>
+      ${manage}</section>`;
   }
   const html = types.map(t => {
     const color = RELATION_COLORS[t] || '#9aa0b5';
     const items = byType[t].map(r => {
       const name = _linkTargetName(r.to);
       const path = `3-概念/${name}.md`;
-      const note = r.note ? `<span style="color:var(--faint);font-size:11px"> · ${ESC(r.note)}</span>` : '';
-      return `<a href="#" data-action="openDetail" data-args='${JSON.stringify([path])}' style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;margin-bottom:4px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>${ESC(name)}</a>${note}`;
+      const note = r.note ? `<span class="rel-note" title="${ESC(r.note)}">${ESC(r.note)}</span>` : '';
+      return `<div class="rel-item">
+        <a href="#" class="rel-pill" data-action="openDetail" data-args='${JSON.stringify([path])}'>
+          <span class="rel-dot" style="background:${color}"></span>${ESC(name)}</a>
+        ${note}</div>`;
     }).join('');
-    return `<div style="margin-bottom:6px"><span style="font-size:11px;color:${color};font-weight:600">${ESC(t)}</span>：${items}</div>`;
+    return `<div class="rel-group">
+      <div class="rel-group-h"><span class="rel-dot" style="background:${color}"></span>${ESC(t)}</div>
+      <div class="rel-pills">${items}</div></div>`;
   }).join('');
-  return `<div class="extract-step">关系</div>
+  return `<section class="concept-field">
+    <div class="concept-field-h"><span class="cf-ico">🔗</span>关系</div>
     <div id="conceptRels">${html}</div>
-    <button class="btn-g sm" data-action="openRelationEditor" data-args='${JSON.stringify([it.path])}' style="margin-top:6px">＋ 管理关系</button>`;
+    ${manage}</section>`;
 }
 
 async function enterConceptEdit(filepath){

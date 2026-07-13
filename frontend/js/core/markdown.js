@@ -196,6 +196,8 @@ function renderPreviewMd(text, maxLen){
     return lt.startsWith('>') ? l.replace(/^>\s?/, '') : l;
   });
   if(/^#+ /.test(lines[0])) lines.shift();
+  // 去掉所有剩余的行内标题标记（#### 要点二：→ 要点二：），避免卡片预览暴露原始 Markdown
+  lines = lines.map(l => l.replace(/^#{1,6}\s+/, ''));
   let result = lines.join(' ').trim();
   result = renderInline(result);
   result = result.replace(/<p>(.*?)<\/p>/g, '<em>$1</em>');

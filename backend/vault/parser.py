@@ -13,6 +13,14 @@ import re
 from dataclasses import dataclass, field, asdict
 
 
+def _unescape_str(s):
+    """与 templates._esc_str 对称：还原转义的反斜杠与双引号。
+
+    先还原 \\" → " 再还原 \\\\ → \\（顺序不可颠倒，否则会把已还原内容二次处理）。
+    """
+    return s.replace('\\"', '"').replace('\\\\', '\\')
+
+
 def parse_frontmatter(text):
     """解析 Markdown 文件中的 YAML frontmatter"""
     fm = {}
@@ -30,7 +38,7 @@ def parse_frontmatter(text):
             key, val = kv.group(1), kv.group(2).strip()
             if (val.startswith('"') and val.endswith('"')) or \
                (val.startswith("'") and val.endswith("'")):
-                val = val[1:-1]
+                val = _unescape_str(val[1:-1])
                 quoted = True
             else:
                 quoted = False
@@ -38,7 +46,9 @@ def parse_frontmatter(text):
             if val.startswith('[[') and val.endswith(']]'):
                 fm[key] = val
             elif val.startswith('[') and val.endswith(']'):
-                items = re.findall(r'"([^"]*)"', val)
+                # 支持转义双引号：\" 在值内表示一个字面 "，避免含引号的内容被截断
+                items = re.findall(r'"((?:[^"\\]|\\.)*)"', val)
+                items = [_unescape_str(it) for it in items]
                 if not items:
                     items = [x.strip() for x in val[1:-1].split(',') if x.strip()]
                 fm[key] = items
@@ -80,19 +90,63 @@ def extract_wikilinks(text):
 
 
 def _parse_concept_sections(body):
-    """从概念正文解析结构化字段（兼容 frontmatter 未存这些字段的文件）"""
+    """从概念正文解析结构化字段（兼容 frontmatter 未存这些字段的文件）
+
+    关键：章节边界只认「已知章节标题」（来源/原文摘录/核心解释/怎么用/关联概念），
+    不能把用户正文里的任意 `## 子标题` 当成章节分隔——否则多段、带小标题的长内容
+    会在读取时被截断，再次保存即永久丢失（曾出现的“字段过多内容丢失”恶性 bug）。
+    """
+    # 定义：紧跟标题 `# ...` 之后的引用块（> 一行）。锚定在标题后，避免误抓正文里的 `>` 引用。
     definition = ''
-    m = re.search(r'^>\s*(.+?)\s*$', body, re.MULTILINE)
+    m = re.search(r'^#.*\n+>\s*(.+?)\s*$', body, re.MULTILINE)
     if m:
         definition = m.group(1).strip()
+    # 仅以已知章节标题作为边界
+    _KNOWN = ['来源', '原文摘录', '核心解释', '怎么用', '关联概念']
+    _known_alt = '|'.join(re.escape(h) for h in _KNOWN)
     def sec(name):
-        pat = r'##\s*' + re.escape(name) + r'\s*\n(.*?)(?=\n##\s|\Z)'
-        mm = re.search(pat, body, re.DOTALL)
-        return mm.group(1).strip() if mm else ''
+        # 边界前瞻：① 下一章节头前可有/可无空行（损坏文件常见「## A」紧跟「## B」无空行）；
+        # ② 取所有匹配中内容最长的一段——损坏文件可能出现重复的「## 核心解释」，
+        #    空的重头会被跳过，保留真正有内容的那一段。
+        pat = (r'##\s*' + re.escape(name) + r'\s*\n'
+               r'(.*?)(?=\n##\s*(?:' + _known_alt + r')\s*'
+               r'|##\s*(?:' + _known_alt + r')\s*'   # 容忍紧接着的下一章节头（无空行）
+               r'|\n#|\Z)')
+        matches = re.findall(pat, body, re.DOTALL)
+        if not matches:
+            return ''
+        return max(matches, key=lambda m: len(m.strip())).strip()
     excerpt = sec('原文摘录')
     content = sec('核心解释')
     how_to_use = sec('怎么用')
     return definition, excerpt, content, how_to_use
+
+
+_CONCEPT_KNOWN = ['来源', '原文摘录', '核心解释', '怎么用', '关联概念']
+_CONCEPT_KNOWN_ALT = '|'.join(re.escape(h) for h in _CONCEPT_KNOWN)
+
+
+def _strip_concept_wrapper(body):
+    """核心解释缺失时，从正文抽取「自由内容」：
+
+    剥掉 ① 开头的 `# 标题` 行；② 紧跟的 `> 定义` 行；③ 所有已知章节块
+    （`## 来源` / `## 原文摘录` / `## 核心解释` / `## 怎么用` / `## 关联概念`
+    及其内容）。保留 `## 正题` 这类内容小节作为 content，且绝不让 `> 定义`
+    行漏进 content 被 markdown 渲染成引用块。
+
+    用于两类概念：早年损坏文件（章节头错乱）、以及直接以 `## 小节` 写内容、
+    没有 `## 核心解释` 包裹的写法（如「感性确定性」）。
+    """
+    text = body
+    # ① 剥掉开头的 # 标题 行
+    text = re.sub(r'^\s*#\s+.+\n?', '', text, count=1)
+    # ② 剥掉紧跟的 > 定义 行（及之间的空行）
+    text = re.sub(r'^\s*>\s*[^\n]*\n?', '', text, count=1)
+    # ③ 剥掉所有已知章节块（含其内容），直到下一个 ## 或文末
+    text = re.sub(
+        r'\n##\s*(?:' + _CONCEPT_KNOWN_ALT + r')\b[^\n]*\n.*?(?=\n##\s|\Z)',
+        '', text, flags=re.DOTALL)
+    return text.strip()
 
 
 @dataclass

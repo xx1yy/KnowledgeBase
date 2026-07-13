@@ -167,6 +167,44 @@ async function renderList(type){
     return;
   }
 
+  // 概念列表：专属卡片——突出 definition + 干净内容预览
+  if(type==='concept'){
+    const html = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+      ${filtered.map(it=>{
+        const def = it.definition ? `<div class="concept-card-def">💡 ${ESC(it.definition)}</div>` : '';
+        const body = renderPreviewMd(it.content, 120);
+        // 去掉 content 中与 definition 完全重复的首句，避免冗余
+        let preview = body;
+        if(it.definition && body){
+          const defPlain = it.definition.slice(0, 30);
+          const tmp = document.createElement('div');
+          tmp.innerHTML = body;
+          if((tmp.textContent||'').startsWith(defPlain)){
+            preview = '';
+          }
+        }
+        const tags = (it.tags||[]).slice(0,3).map(t=>`<span class="tag concept-tag">${ESC(t)}</span>`).join('');
+        const domain = it.domain ? `<span class="type-badge badge-domain">${ESC(it.domain)}</span>` : '';
+        const relCount = (it.relations||[]).length;
+        return `<div class="panel concept-list-card" data-action="openDetail" data-args='${JSON.stringify([it.path])}'>
+          <div class="concept-list-head">
+            <div class="concept-list-title">${ESC(it.title)}</div>
+            ${relCount ? `<span class="concept-rel-count" title="${relCount} 个关系">🔗 ${relCount}</span>` : ''}
+          </div>
+          ${def}
+          ${preview ? `<div class="concept-list-preview">${preview}</div>` : ''}
+          <div class="concept-list-foot">
+            <span>${domain}${tags}</span>
+            <span class="concept-list-time">${FMTREL(it.mtime)}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+    document.getElementById('content').innerHTML = html;
+    return;
+  }
+
   return document.getElementById('content').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${filtered.map(it=>{

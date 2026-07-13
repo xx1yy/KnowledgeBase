@@ -18,7 +18,8 @@ async function openDetail(filepath, opts){
     // 视频封面占位（本地 cover 字段，无则显示重新获取按钮）
     html += `<div class="book-cover-wrap" id="videoCoverWrap" style="display:none"><img class="book-cover" id="videoCoverImg" alt="${ESC(it.title)} 封面" referrerpolicy="no-referrer"></div>`;
   }
-  html += `<div class="detail-title">${ESC(it.title)}</div>`;
+  if(it.type!=='concept'){
+    html += `<div class="detail-title">${ESC(it.title)}</div>`;
   html += `<div class="detail-meta">`;
   if(t) html += `<span class="type-badge ${t.typeCls}">${t.icon} ${t.label}</span>`;
   if(it.status) html += `<span class="type-badge ${statusColor(it.status)}">${it.status}</span>`;
@@ -30,6 +31,7 @@ async function openDetail(filepath, opts){
   if(it.source) html += `<div class="detail-section"><h4>来源</h4><p>${ESC(it.source)}</p></div>`;
   if(it.url) html += `<div class="detail-section"><h4>链接</h4><p><a href="${ESC(it.url)}" target="_blank">${ESC(it.url)}</a></p></div>`;
   if(it.domain) html += `<div class="detail-section"><h4>领域</h4><p>${ESC(it.domain)}</p></div>`;
+  }
   if(it.type==='concept'){
     // 概念类型：conceptViewHtml 已包含四字段 + 「被以下笔记引用」
     html += `<div class="detail-section">${conceptViewHtml(it, filepath)}</div>`;

@@ -101,6 +101,14 @@ class CrudMixin:
             target_dir.mkdir(parents=True, exist_ok=True)
             filepath = self._unique_filepath(target_dir, data.get('title', '未命名'))
             filepath.write_text(generate_md(item_type, data), encoding='utf-8')
+            # 概念：模板正文承载结构化字段，relations 需写回 frontmatter
+            # （模板不含 relations 占位，避免与正文字段冲突）。否则创建即丢失关系。
+            if item_type == 'concept' and data.get('relations'):
+                txt = filepath.read_text(encoding='utf-8')
+                fm, content, _ = parse_frontmatter(txt)
+                fm['relations'] = data['relations']
+                filepath.write_text(
+                    f'---\n{_build_frontmatter(fm)}\n---\n{content}', encoding='utf-8')
         item = item_from_file(filepath)
         self._send_json(item, 201)
 
@@ -251,14 +259,17 @@ class CrudMixin:
         fm['last_checkin'] = today
         fm['updated'] = now
         new_fm_str = _build_frontmatter(fm)
-        # 用正则定位第二个 --- 的结束位置（m.end()），确保不截断正文
-        _fm_match = re.match(r'^---\s*\n.*?\n---', old_text, re.DOTALL)
-        if _fm_match:
-            body_start = _fm_match.end()
-            rest = old_text[body_start:].lstrip('\n')
+        # 稳健提取正文：优先匹配完整的「--- … ---」frontmatter 块；
+        # 若文件因历史 bug 丢失了开头 fence（只剩结尾 ---），则取首个独立 --- 行之后的内容。
+        # ⚠️ 必须重写带开头 fence 的完整 frontmatter，否则下次读取时 plan_type 会丢失，
+        #    习惯打卡被判定为「普通行动」且无法再次打卡（曾出现的恶性 bug：每次打卡都重写掉开头 ---）。
+        fm_block = re.match(r'^---\s*\n.*?\n---\s*\n?', old_text, re.DOTALL)
+        if fm_block:
+            rest = old_text[fm_block.end():]
         else:
-            rest = content or ''
-        new_text = new_fm_str + '\n---\n' + (rest or '')
+            parts = re.split(r'\n---\s*\n?', old_text, maxsplit=1)
+            rest = parts[1] if len(parts) > 1 else (content or '')
+        new_text = '---\n' + new_fm_str + '\n---\n' + (rest or '')
         # 更新打卡记录表（追加到正文末尾的表格中）
         checkin_row = f"\n| {today} | 打卡 |"
         if '| 日期 |' in new_text:

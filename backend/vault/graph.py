@@ -12,7 +12,7 @@ from pathlib import Path
 
 from backend.config import VAULT_ROOT, DIR_TYPE
 from .parser import (
-    VaultItem, _normalize_list, _normalize_relations,
+    VaultItem, _normalize_list, _normalize_relations, _strip_concept_wrapper,
     _parse_concept_sections, _link_target_name,
 )
 from .cache import _read_parsed
@@ -110,6 +110,11 @@ def item_from_file(filepath):
             item.excerpt = d_exc
         if d_con:
             item.content = d_con
+        else:
+            # 核心解释缺失（早年损坏文件 / 无 ## 核心解释 头的写法，如「感性确定性」）：
+            # 回退正文，但剥掉 # 标题、> 定义、以及已知章节块（来源/原文摘录/怎么用/关联概念），
+            # 保留 ## 正题 这类内容小节作为内容，且绝不让 > 定义行漏进 content 渲染成引用块。
+            item.content = _strip_concept_wrapper(content)
         if d_how:
             item.how_to_use = d_how
     return asdict(item)
