@@ -160,6 +160,7 @@ async function loadConceptsForNote(conceptNames){
 async function refreshNoteRightbar(conceptNames, fp, isVideo, parentName, conceptCount, it){
   const actions = [
     {label:'💡 提取概念', action:'showExtractConcept', args:[], type:'primary'},
+    {label:'🔗 关联已有概念', action:'linkExistingConcept', args:[]},
     {label:'✏️ 编辑笔记', action:'toggleNoteEdit', args:[]},
     {label:'🗑 删除笔记', action:'deleteItem', args:[encodeURIComponent(fp)], type:'danger'}
   ];
@@ -180,4 +181,49 @@ async function refreshNoteRightbar(conceptNames, fp, isVideo, parentName, concep
 
   renderRightbar({actions, concepts: conceptItems, info});
   window.noteRightbarCtx = {actions, concepts: conceptItems, info};
+}
+
+// ── 关联已有概念：把已存在的概念绑定到当前笔记（不新建重复概念文件）──
+async function linkExistingConcept(){
+  if(!currentNotePath){ alert('请先打开一篇笔记'); return; }
+  let concepts = [];
+  try{ concepts = await get('/items?type=concept'); }catch(e){ concepts = []; }
+  const opts = concepts.map(c => `<option value="${ESC(c.title)}">`).join('');
+  const already = (currentNoteData && currentNoteData.concepts) || [];
+  const modal = document.getElementById('modal');
+  if(!modal) return;
+  modal.innerHTML = `
+    <div class="modal-head"><h3>🔗 关联已有概念</h3><button class="modal-close" data-action="closeModal" data-args='[]'>✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">把已存在的概念绑定到当前笔记《${ESC((currentNoteData&&currentNoteData.title)||'')}》。绑定后该概念详情页的「被以下笔记引用」会列出本文。</p>
+      <datalist id="linkConceptList">${opts}</datalist>
+      <input class="extract-input" id="linkConceptName" list="linkConceptList" placeholder="输入或选择概念名（须与已有概念完全一致）" style="width:100%;margin-bottom:10px" autocomplete="off">
+      <div style="font-size:11px;color:var(--faint);margin-bottom:14px">已关联：${already.length?ESC(already.join('、')):'（无）'}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn-g" data-action="closeModal">取消</button>
+        <button class="btn-p" data-action="confirmLinkConcept">关联</button>
+      </div>
+    </div>`;
+  document.getElementById('modalMask').classList.add('show');
+  const inp = document.getElementById('linkConceptName');
+  if(inp) inp.focus();
+}
+
+async function confirmLinkConcept(){
+  const inp = document.getElementById('linkConceptName');
+  if(!inp){ return; }
+  const nm = (inp.value || '').trim();
+  if(!nm){ alert('请输入概念名'); return; }
+  let concepts = [];
+  try{ concepts = await get('/items?type=concept'); }catch(e){ concepts = []; }
+  const exists = concepts.some(c => c.title === nm);
+  if(!exists){ alert('未找到概念「' + nm + '」，请先用「提取概念」创建，或检查名称是否完全一致'); return; }
+  const fp = currentNotePath;
+  const current = (currentNoteData && currentNoteData.concepts) || [];
+  if(current.includes(nm)){ alert('《' + nm + '》已关联本文'); closeModal(); return; }
+  try{
+    await put('/item', {path: fp, concepts: current.concat([nm])});
+    closeModal();
+    await loadNoteContent(encodeURIComponent(fp), {push:false});
+  }catch(e){ alert('关联失败：' + (e && e.message ? e.message : e)); }
 }

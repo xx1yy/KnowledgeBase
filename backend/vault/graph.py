@@ -151,7 +151,17 @@ def _snippet(text, query):
 
 
 def get_graph_data():
-    """获取知识图谱数据 (nodes + edges)"""
+    """获取知识图谱数据 (nodes + edges)
+
+    边来源（三种，均参与建边）：
+      1. 正文 wikilink（links）        → 关系「相关」（占位，可被下方覆盖）
+      2. 结构化关系（relations）        → 带类型（覆盖同对的「相关」边）
+      3. 笔记 concepts 字段绑定概念     → 关系「来源」（「关联已有概念」写入处，
+                                          之前图谱未读它，导致绑定后边不显示）
+
+    文学笔记（book-notes）默认不进图谱以免纯文本笔记撑爆视图；
+    但只要它参与了上述任意边，就作为节点入图（否则边没有源节点、画不出来）。
+    """
     nodes = []
     edges = []
     node_ids = set()
@@ -160,9 +170,52 @@ def get_graph_data():
     for d, _ in DIR_TYPE.items():
         for f in list_md_files(d):
             item = item_from_file(f)
-            # 知识图谱排除文学笔记，避免图谱过于复杂
-            if item['type'] == 'book-notes':
+            is_book_notes = item['type'] == 'book-notes'
+
+            local_edges = []  # 本条目产生的所有边：(src, tgt, edge)
+
+            # ① 普通 wikilink → 关系「相关」（占位，后续强关系可覆盖）
+            for link in item['links']:
+                link_name = _link_target_name(link)
+                if not link_name:
+                    continue
+                local_edges.append((item['id'], link_name, {
+                    'source': item['id'],
+                    'target': link_name,
+                    'sourceType': item['type'],
+                    'relation': '相关',
+                    'relationLabel': '相关',
+                }))
+            # ② 结构化关系 → 带类型
+            for rel in item.get('relations', []):
+                link_name = _link_target_name(rel.get('to', ''))
+                if not link_name:
+                    continue
+                rtype = rel.get('type') or '相关'
+                local_edges.append((item['id'], link_name, {
+                    'source': item['id'],
+                    'target': link_name,
+                    'sourceType': item['type'],
+                    'relation': rtype,
+                    'relationLabel': rtype,
+                }))
+            # ③ 笔记 concepts 字段绑定的概念 → 关系「来源」
+            for cn in item.get('concepts', []):
+                link_name = _link_target_name(cn)
+                if not link_name:
+                    continue
+                local_edges.append((item['id'], link_name, {
+                    'source': item['id'],
+                    'target': link_name,
+                    'sourceType': item['type'],
+                    'relation': '来源',
+                    'relationLabel': '来源',
+                }))
+
+            # 文学笔记仅在其参与边时加入图谱（避免纯文本笔记撑爆图谱）
+            if is_book_notes and not local_edges:
                 continue
+
             if item['id'] not in node_ids:
                 node_ids.add(item['id'])
                 nodes.append({
@@ -173,34 +226,16 @@ def get_graph_data():
                     'path': item['path'],
                     'domain': item.get('domain', ''),
                 })
-            # 普通 wikilink → 关系类型「相关」（先占位，可能被下方的结构化关系覆盖）
-            for link in item['links']:
-                link_name = _link_target_name(link)
-                if not link_name:
-                    continue
-                edge_key = (item['id'], link_name)
-                if edge_key not in edge_map:
-                    edge_map[edge_key] = {
-                        'source': item['id'],
-                        'target': link_name,
-                        'sourceType': item['type'],
-                        'relation': '相关',
-                        'relationLabel': '相关',
-                    }
-            # 结构化关系 → 带类型（覆盖同对的「相关」边）
-            for rel in item.get('relations', []):
-                link_name = _link_target_name(rel.get('to', ''))
-                if not link_name:
-                    continue
-                edge_key = (item['id'], link_name)
-                rtype = rel.get('type') or '相关'
-                edge_map[edge_key] = {
-                    'source': item['id'],
-                    'target': link_name,
-                    'sourceType': item['type'],
-                    'relation': rtype,
-                    'relationLabel': rtype,
-                }
+
+            # 合并边：强关系（非「相关」）覆盖「相关」占位，其余保留
+            for src, tgt, e in local_edges:
+                key = (src, tgt)
+                if key not in edge_map:
+                    edge_map[key] = e
+                else:
+                    existing = edge_map[key]
+                    if existing.get('relation') == '相关' and e.get('relation') != '相关':
+                        edge_map[key] = e
     edges = list(edge_map.values())
     return {'nodes': nodes, 'edges': edges}
 

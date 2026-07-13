@@ -15,6 +15,7 @@ const _ACTION_NAMES = [
   'viewTagItems', 'renameTag', 'deleteTag', 'closeModal', 'closeModalThenOpenDetail',
   // 概念关系
   'openRelationEditor', 'addRelationRow', 'removeRelationRow', 'saveConceptRelations',
+  'linkExistingConcept', 'confirmLinkConcept',
   // 笔记（书/视频/帖子）
   'showAddNoteModal', 'toggleBooks', 'selectBook', 'loadNoteContent', 'toggleChapters',
   'toggleNoteManualSort', 'loadChapterFirst', 'triggerImageUpload', 'cancelNoteEdit',
