@@ -5,15 +5,45 @@ function imgSrc(name){
   if(/^(https?:)?\/\//i.test(name) || name.startsWith('/')) return name;
   return '/api/file/' + encodeURI(name);
 }
+// 解析单个尺寸量：200 → 200px，50% → 50%（其余返回空）
+function _parseDim(s){
+  s = (s||'').trim().toLowerCase();
+  if(/^\d+(\.\d+)?%$/.test(s)) return s;
+  if(/^\d+(\.\d+)?$/.test(s)) return s + 'px';
+  return '';
+}
+// 解析 Obsidian 图片尺寸符：W / WxH / xH / 50% / 50%x30%（默认 px）
+function parseImgSize(spec){
+  if(!spec) return '';
+  spec = spec.trim().toLowerCase();
+  const parts = spec.split('x');
+  const out = [];
+  if(parts.length === 1){
+    const v = _parseDim(parts[0]); if(v) out.push('width:' + v);
+  } else if(parts.length === 2){
+    const a = _parseDim(parts[0]);   // W（或 x 打头时为空）
+    const b = _parseDim(parts[1]);   // H
+    if(a) out.push('width:' + a);
+    if(b) out.push('height:' + b);
+  }
+  return out.join(';');
+}
 function renderInline(text){
   const imgs = [];
   let html = text;
   // 先把图片语法替换为占位 token，避免被下方 wikilink / 加粗正则误处理
   html = html.replace(/!\[\[([^\]]+)\]\]/g, (m, p) => {
     const token = '\u0000IMG' + imgs.length + '\u0000';
-    const src = imgSrc(p.trim());
-    const alt = ESC(p.trim().split('/').pop());
-    imgs.push(`<img class="md-img" src="${src}" alt="${alt}" loading="lazy">`);
+    // 拆分 文件名|尺寸（取最后一个 |，文件名本身不含 |）
+    let spec = p.trim();
+    let size = '';
+    const bar = spec.lastIndexOf('|');
+    if(bar !== -1){ size = spec.slice(bar+1).trim(); spec = spec.slice(0, bar).trim(); }
+    const src = imgSrc(spec);
+    const alt = ESC(spec.split('/').pop());
+    const dim = parseImgSize(size);
+    const style = dim ? ` style="${dim}"` : '';
+    imgs.push(`<img class="md-img" src="${src}" alt="${alt}" loading="lazy"${style}>`);
     return token;
   });
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, url) => {

@@ -4,7 +4,7 @@
 let _g = null;  // 模块级图谱状态
 let _rawGraph = null;       // 最近一次 /graph 原始数据（过滤后重绘用）
 let _hiddenTypes = new Set(); // 当前被隐藏的节点类型
-let _eventsBound = false;   // 容器级事件只绑一次（svg 每次重建，wheel 单独绑）
+let _windowBound = false;   // window 级(mousemove/up)只绑一次（读模块级 _g，永远最新）
 
 // 节点类型 → 图标（与 core/utils.js 的 TYPE_MAP 保持一致，内联以保证图谱自包含）
 const GRAPH_TYPE_ICONS = {book:'📚',video:'🎬',post:'📱',concept:'💡',reflection:'💭',problem:'❓',plan:'🎯','book-notes':'📝','video-notes':'📺','post-notes':'📱',quicknote:'⚡'};
@@ -28,10 +28,17 @@ async function renderGraph(){
     </div>
     <div class="graph-filters" id="graphFilters"></div>
   </div>`;
+  const box = document.getElementById('graphBox');
   const data = await get(withDomain('/graph'));
   _rawGraph = data;
   _hiddenTypes = new Set(_hiddenTypes); // 保留上次过滤状态
   _buildFilters();
+  // box / 工具栏是 renderGraph 新建的，事件在此绑一次（重建 svg 时 box 不变，不会重复绑）
+  box.addEventListener('mousedown', _onDown);
+  box.querySelectorAll('.gbtn').forEach(b=>{
+    b.removeEventListener('click', _onGbtn);
+    b.addEventListener('click', _onGbtn);
+  });
   _buildGraph(data);
 }
 
@@ -274,19 +281,21 @@ function _hitNode(cx, cy){
 }
 
 function _bindEvents(){
-  const {svg, box}=_g;
-  // 容器/窗口级事件只绑一次（svg 每次重建，但 _g 引用刷新，回调始终读最新状态）
-  if(!_eventsBound){
-    _eventsBound = true;
-    box.addEventListener('mousedown', _onDown);
+  const {svg}=_g;
+  // window 级只绑一次（回调读模块级 _g，永远指向当前图）
+  if(!_windowBound){
+    _windowBound = true;
     window.addEventListener('mousemove', _onMove);
     window.addEventListener('mouseup', _onUp);
-    box.querySelectorAll('.gbtn').forEach(b=>{
-      b.addEventListener('click', ()=>{ if(b.dataset.g==='reset') _reset(); else _fit(); });
-    });
   }
-  // 新建 svg 必重新绑滚轮（旧 svg 已移除）
+  // svg 每次重建都是新元素，旧 svg 已移除，直接绑滚轮
   svg.addEventListener('wheel', _onWheel, {passive:false});
+}
+
+// 工具栏按钮（重排/适应）—— 在 renderGraph 里绑定，稳定引用避免重复绑
+function _onGbtn(ev){
+  const b = ev.currentTarget;
+  if(b.dataset.g==='reset') _reset(); else _fit();
 }
 
 function _onDown(ev){
