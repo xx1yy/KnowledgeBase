@@ -1,17 +1,8 @@
 // Notes — 列表渲染 + 内容加载 + 视频封面（从原 note.js 拆分）
 //
-// 本文件持有笔记模块的共享状态，必须在 chapters.js / editor.js 之前加载：
-// 这些共享 let 绑定位于全局词法作用域，chapters.js、editor.js 中的函数仅引用、
-// 不重复声明，因此加载顺序保证「先声明、后引用」无 TDZ 风险。
-
-let currentNotePath = null;
-let currentNoteData = null;
-let currentNotesView = null;
-let currentBookFilter = null;
-// 文学笔记排序状态（持久化到 localStorage）
-let noteSortMode = localStorage.getItem('kb_noteSortMode') || 'mtime'; // mtime|ctime|title
-let noteManualSort = localStorage.getItem('kb_noteManualSort') === '1';
-let _dragPath = null;
+// 笔记模块的共享可变状态（currentNotePath / currentNoteData / currentBookFilter /
+// noteSortMode / noteManualSort / _dragPath 等）已统一收敛到 notes/state.js，
+// 并在本文件之前加载。本文件仅对这些变量赋值、不再重复声明。
 
 // ── 各平台封面尺寸（用于「自动适配」预览） ──
 const PLATFORM_COVERS = [

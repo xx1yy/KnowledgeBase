@@ -53,11 +53,14 @@
 
 <!-- Core: 基础设施（按依赖顺序） -->
 <script src="js/core/api.js"></script>
+<script src="js/core/types.js"></script>
 <script src="js/core/utils.js"></script>
 <script src="js/core/markdown.js"></script>
 <script src="js/core/router.js"></script>
 <script src="js/core/domain-filter.js"></script>
 <!-- Notes: 笔记/概念/图片 -->
+<!-- 共享状态（最先加载，供 concept-detail/list/chapters/editor/extract 引用，避免 TDZ） -->
+<script src="js/notes/state.js"></script>
 <script src="js/notes/concept-detail.js"></script>
 <script src="js/core/modals.js"></script>
 <script src="js/notes/extract-concept.js"></script>

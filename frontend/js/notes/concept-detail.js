@@ -1,20 +1,7 @@
 // Concept Detail — 概念查看/编辑（主区分栏显示，不覆盖笔记）
 let _recentConcepts = null;
 
-// 关系类型词典（概念间各种关联）——后端 get_graph_data / 前端图谱共用
-const RELATION_TYPES = [
-  {value:'相关', label:'相关', color:'#9aa0b5'},
-  {value:'延伸', label:'延伸', color:'#534AB7'},
-  {value:'属于', label:'属于', color:'#0F6E56'},
-  {value:'包含', label:'包含', color:'#1D9E75'},
-  {value:'前置', label:'前置/依赖', color:'#185FA5'},
-  {value:'对立', label:'对立/对比', color:'#A32D2D'},
-  {value:'实例', label:'实例/应用', color:'#BA7517'},
-  {value:'因果', label:'因果', color:'#993C1D'},
-  {value:'来源', label:'来源/派生', color:'#712B13'},
-];
-const RELATION_COLORS = {};
-RELATION_TYPES.forEach(r => { RELATION_COLORS[r.value] = r.color; });
+// 关系类型常量（RELATION_TYPES / RELATION_COLORS）统一在 core/types.js 声明，已全局可用。
 
 // 从 wikilink 形式取出概念名（'[[3-概念/涌现]]' → '涌现'）
 function _linkTargetName(raw){
