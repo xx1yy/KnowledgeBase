@@ -18,20 +18,61 @@ const GRAPH_REL_FB = [
   {value:'来源',label:'来源/派生',color:'#712B13'},
 ];
 
+// ── 布局持久化（localStorage，纯前端，跨刷新保留手动拖拽/缩放状态）──
+const LS_KEY = 'kb-graph-layout-v1';
+// 类型隐藏偏好（与布局分开存：重排只清布局，不清隐藏偏好）
+const LS_KEY_HIDDEN = 'kb-graph-hidden-v1';
+function _loadLayout(){
+  try{ const raw=localStorage.getItem(LS_KEY); if(!raw) return null;
+       const o=JSON.parse(raw); return (o&&o.nodes)?o:null;
+  }catch(e){ return null; }
+}
+function _saveLayout(){
+  if(!_g) return;
+  const nodes={};
+  _g.nodes.forEach(n=>{ nodes[n.id]={x:Math.round(n._x),y:Math.round(n._y),p:n._pinned?1:0}; });
+  const payload={v:1, nodes, view:{x:Math.round(_g.view.x),y:Math.round(_g.view.y),s:_g.view.s}};
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(payload)); }catch(e){}
+}
+let _saveLayoutTimer=null;
+function _saveLayoutDebounced(){
+  if(_saveLayoutTimer) clearTimeout(_saveLayoutTimer);
+  _saveLayoutTimer=setTimeout(_saveLayout, 300);
+}
+function _clearLayout(){ try{ localStorage.removeItem(LS_KEY); }catch(e){} }
+// ── 类型隐藏偏好持久化 ──
+function _loadHidden(){
+  try{ const raw=localStorage.getItem(LS_KEY_HIDDEN); if(!raw) return new Set();
+       const arr=JSON.parse(raw); return (Array.isArray(arr))?new Set(arr):new Set();
+  }catch(e){ return new Set(); }
+}
+function _saveHidden(){
+  try{ localStorage.setItem(LS_KEY_HIDDEN, JSON.stringify([..._hiddenTypes])); }catch(e){}
+}
+// 把当前 _x/_y 应用到 SVG（节点 transform + 边端点）。供「恢复布局」「重排」复用
+function _applyPositions(){
+  if(!_g) return;
+  _g.nodeEls.forEach(n=>{ n._grp.setAttribute('transform',`translate(${n._x},${n._y})`); });
+  _g.edgeEls.forEach(e=>{
+    const s=_g.nodeById[e.source], t=_g.nodeById[e.target];
+    if(s&&t){ e.el.setAttribute('x1',s._x); e.el.setAttribute('y1',s._y); e.el.setAttribute('x2',t._x); e.el.setAttribute('y2',t._y); }
+  });
+}
+
 async function renderGraph(){
   const content = document.getElementById('content');
   content.innerHTML = `<div class="graph-container" id="graphBox">
     <div class="graph-toolbar">
-      <button class="gbtn" data-g="reset" title="重新计算布局">⟲ 重排</button>
+      <button class="gbtn" data-g="reset" title="重新计算布局（并清除已保存的手动布局）">⟲ 重排</button>
       <button class="gbtn" data-g="fit" title="适应窗口">⤢ 适应</button>
-      <span class="graph-hint">拖节点移动 · 拖空白平移 · 滚轮缩放 · 悬停高亮 · 点击打开</span>
+      <span class="graph-hint">拖节点移动 · 拖空白平移 · 滚轮缩放 · 悬停高亮 · 点击打开 · 布局与隐藏状态自动保存</span>
     </div>
     <div class="graph-filters" id="graphFilters"></div>
   </div>`;
   const box = document.getElementById('graphBox');
   const data = await get(withDomain('/graph'));
   _rawGraph = data;
-  _hiddenTypes = new Set(_hiddenTypes); // 保留上次过滤状态
+  _hiddenTypes = _loadHidden(); // 读取上次保存的隐藏类型偏好
   _buildFilters();
   // box / 工具栏是 renderGraph 新建的，事件在此绑一次（重建 svg 时 box 不变，不会重复绑）
   box.addEventListener('mousedown', _onDown);
@@ -58,6 +99,7 @@ function _buildFilters(){
       const t=b.dataset.type, lbl=GRAPH_TYPE_LABELS[t]||t;
       if(_hiddenTypes.has(t)){ _hiddenTypes.delete(t); b.classList.remove('off'); b.title='隐藏'+lbl; }
       else { _hiddenTypes.add(t); b.classList.add('off'); b.title='显示'+lbl; }
+      _saveHidden();   // 持久化隐藏偏好，跨刷新保留
       _rebuild();
     });
   });
@@ -148,6 +190,17 @@ function _buildGraph(data){
 
   _forceLayout(nodes, edges, W, H, 350);
 
+  // 恢复已保存的手动布局：把保存过的节点钉到原坐标（pinned），其余交给力导向
+  const saved = _loadLayout();
+  if(saved && saved.nodes){
+    let any=false;
+    nodes.forEach(n=>{
+      const s=saved.nodes[n.id];
+      if(s){ n._x=s.x; n._y=s.y; n._pinned=!!s.p; any=true; }
+    });
+    if(any) _applyPositions();
+  }
+
   const colors = {book:'var(--green)','book-notes':'#5b8c5a',video:'var(--orange)','video-notes':'#c87f3e',concept:'var(--accent)',reflection:'#7c5ce7',problem:'var(--red)',plan:'var(--orange)'};
   const _relGlobals = (typeof RELATION_COLORS !== 'undefined') ? RELATION_COLORS : {};
   const relColors = Object.assign({}, _relGlobals);
@@ -223,7 +276,13 @@ function _buildGraph(data){
 
   _applyView();
   _bindEvents();
-  _fit();  // 初次自动适应
+  // 有保存的视图（缩放/平移）则精确还原，否则首次自动适应
+  if(saved && saved.view){
+    _g.view={x:saved.view.x, y:saved.view.y, s:saved.view.s};
+    _applyView();
+  }else{
+    _fit();
+  }
 }
 
 // 渲染图例：底部统一横条，左半=关系（线色），右半=节点类型（图标）
@@ -339,8 +398,9 @@ function _onUp(ev){
       callAction('openDetail', [n.path]);
     }
     _g.drag=null;
+    _saveLayoutDebounced();        // 拖拽后持久化布局
   }
-  if(_g.pan){ _g.svg.classList.remove('panning'); _g.pan=null; }
+  if(_g.pan){ _g.svg.classList.remove('panning'); _g.pan=null; _saveLayoutDebounced(); }
 }
 
 function _onWheel(ev){
@@ -354,6 +414,7 @@ function _onWheel(ev){
   _g.view.y = my - (my-_g.view.y)*(ns/_g.view.s);
   _g.view.s = ns;
   _applyView();
+  _saveLayoutDebounced();          // 缩放后持久化视图
 }
 
 // 拖动某节点时，更新所有与之相连的边端点
@@ -389,18 +450,12 @@ function _applyHighlight(){
 
 function _reset(){
   const {W,H}=_g;
+  _clearLayout();                 // 重排 = 放弃手动布局，恢复自动力导向
   _g.nodes.forEach(n=>{ n._pinned=false; });
   _forceLayout(_g.nodes, _g.edges, W, H, 350);
-  _g.nodeEls.forEach(n=>{
-    n._grp.setAttribute('transform',`translate(${n._x},${n._y})`);
-    n._grp.style.opacity='1';
-  });
-  _g.edgeEls.forEach(e=>{
-    const s=_g.nodeById[e.source], t=_g.nodeById[e.target];
-    e.el.setAttribute('x1',s._x); e.el.setAttribute('y1',s._y);
-    e.el.setAttribute('x2',t._x); e.el.setAttribute('y2',t._y);
-    e.el.style.opacity='0.75'; e.el.setAttribute('stroke-width','1.4');
-  });
+  _applyPositions();
+  _g.nodeEls.forEach(n=>{ n._grp.style.opacity='1'; });
+  _g.edgeEls.forEach(e=>{ e.el.style.opacity='0.75'; e.el.setAttribute('stroke-width','1.4'); });
   _fit();
 }
 
