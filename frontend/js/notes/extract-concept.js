@@ -17,7 +17,7 @@ async function showExtractConcept(filepath, opts){
   // 更新右侧栏
   renderRightbar({
     actions: [
-      {label:'← 返回笔记', action:'history.back', args:[]},
+      {label:'← 返回笔记', action:'loadNoteContent', args:[fp, {push:false}]},
       {label:'💡 创建概念', action:'saveExtractedConcept', args:[parentName, encodeURIComponent(fp)], type:'primary'}
     ],
     info: `来源：${parentName}<br>步骤：①摘录 → ②命名 → ③定义 → ④解释 → ⑤用法`

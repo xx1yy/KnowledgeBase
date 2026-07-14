@@ -60,8 +60,11 @@ async function openDetail(filepath, opts){
       html += `<div class="detail-section"><h4>📱 帖子笔记</h4><div class="detail-links">${notes.map(n=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([n.path])}'>📄 ${ESC(n.title)}</a>`).join(' · ')}</div></div>`;
     }
   }
-  html += `<div class="detail-section"><h4>链接</h4><div class="detail-links">${(it.links||[]).map(l=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([l+".md"])}'>[[${ESC(l)}]]</a>`).join(' · ')||'无'}</div></div>`;
-  if(it.backlinks&&it.backlinks.length) html += `<div class="detail-section"><h4>被以下引用</h4><div class="detail-links">${it.backlinks.map(bl=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([bl.path])}'>← ${ESC(bl.title)} (${TYPE_MAP[bl.type]?.label||bl.type})</a>`).join(' · ')}</div></div>`;
+  // 概念类型已有专属「被以下笔记引用」区（conceptViewHtml），跳过通用「链接/被以下引用」，避免重复+错误路径+混入不相干笔记
+  if(it.type!=='concept'){
+    html += `<div class="detail-section"><h4>链接</h4><div class="detail-links">${(it.links||[]).map(l=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([l+".md"])}'>[[${ESC(l)}]]</a>`).join(' · ')||'无'}</div></div>`;
+    if(it.backlinks&&it.backlinks.length) html += `<div class="detail-section"><h4>被以下引用</h4><div class="detail-links">${it.backlinks.map(bl=>`<a href="#" data-action="openDetail" data-args='${JSON.stringify([bl.path])}'>← ${ESC(bl.title)} (${TYPE_MAP[bl.type]?.label||bl.type})</a>`).join(' · ')}</div></div>`;
+  }
   html += `<div class="detail-meta" style="font-size:11px;color:var(--faint)">创建于 ${FMT(it.created)} · 更新于 ${FMT(it.updated)} · 文件: ${it.path}</div>`;
   html += `</div></div>`;
   document.getElementById('content').innerHTML = html;

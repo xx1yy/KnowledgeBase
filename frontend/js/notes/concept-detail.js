@@ -53,7 +53,7 @@ async function showConceptPage(filepath, opts){
   // 右侧栏：仅放操作（与提取概念一致）
   renderRightbar({
     actions: [
-      {label:'← 返回笔记', action:'history.back', args:[]},
+      {label:'← 返回笔记', action:'loadNoteContent', args:[currentNotePath, {push:false}]},
       {label:'✏️ 编辑概念', action:'enterConceptEdit', args:[fp], type:'primary'}
     ],
     info: `概念：${it.title}<br>来源：${parentName||'—'}`
