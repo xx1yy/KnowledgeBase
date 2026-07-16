@@ -6,6 +6,8 @@ const _API = (location.host ? '' : 'http://localhost:16000') + '/api';
 async function loadDashboard(){
   try{ dashboardData = await get(withDomain('/dashboard')); counts = dashboardData.counts||{}; }
   catch(e){ dashboardData = {counts:{},recent:[],total:0}; counts = {}; }
+  // 计数刷新后立即重绘侧栏，确保领域过滤后左侧数量实时更新
+  if(typeof renderNav === 'function') renderNav();
 }
 
 async function renderDashboard(){
@@ -167,36 +169,45 @@ async function renderList(type){
     return;
   }
 
-  // 概念列表：专属卡片——突出 definition + 干净内容预览
+  // 领域 → 颜色映射已统一收敛到 core/types.js（DOMAIN_PALETTE / DOMAIN_TINT / domainColor）
+  const _HUB_THRESHOLD = 4;  // 关联数 ≥ 此值标记为「枢纽」
+
+  // 概念列表：专属卡片——突出定义（引述式）+ 领域色条 + 枢纽徽章
   if(type==='concept'){
     const html = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${filtered.map(it=>{
-        const def = it.definition ? `<div class="concept-card-def">💡 ${ESC(it.definition)}</div>` : '';
+        const d = it.domain || '';
+        const dColor = domainColor(d);
+        const isHub = (it.relations||[]).length >= _HUB_THRESHOLD;
+        const relCount = (it.relations||[]).length;
+        const defText = it.definition || '';
         const body = renderPreviewMd(it.content, 120);
-        // 去掉 content 中与 definition 完全重复的首句，避免冗余
         let preview = body;
-        if(it.definition && body){
-          const defPlain = it.definition.slice(0, 30);
+        if(defText && body){
+          const defPlain = defText.slice(0, 30);
           const tmp = document.createElement('div');
           tmp.innerHTML = body;
-          if((tmp.textContent||'').startsWith(defPlain)){
-            preview = '';
-          }
+          if((tmp.textContent||'').startsWith(defPlain)) preview = '';
         }
         const tags = (it.tags||[]).slice(0,3).map(t=>`<span class="tag concept-tag">${ESC(t)}</span>`).join('');
-        const domain = it.domain ? `<span class="type-badge badge-domain">${ESC(it.domain)}</span>` : '';
-        const relCount = (it.relations||[]).length;
-        return `<div class="panel concept-list-card" data-action="openDetail" data-args='${JSON.stringify([it.path])}'>
+        // 卡片根样式：左侧色条 + 极淡领域色底（DOMAIN_TINT≈7%）+ 枢纽加强边框
+        const cardStyle = dColor
+          ? `border-left:4px solid ${dColor};background:${dColor}${DOMAIN_TINT}${isHub ? ';border-color:' + dColor + ';box-shadow:0 0 0 1px ' + dColor + '33' : ''}`
+          : (isHub ? 'border-color:hsl(var(--co-purple),.5);box-shadow:0 0 0 1px hsl(var(--co-purple),.25)' : '');
+        return `<div class="panel concept-list-card${isHub ? ' is-hub' : ''}" style="${cardStyle}" data-action="openDetail" data-args='${JSON.stringify([it.path])}'>
           <div class="concept-list-head">
             <div class="concept-list-title">${ESC(it.title)}</div>
-            ${relCount ? `<span class="concept-rel-count" title="${relCount} 个关系">🔗 ${relCount}</span>` : ''}
+            <div class="concept-rel-area">
+              ${relCount ? `<span class="concept-rel-count" title="${relCount} 个关系">🔗 ${relCount}</span>` : ''}
+              ${isHub ? `<span class="concept-hub-badge">枢纽</span>` : ''}
+            </div>
           </div>
-          ${def}
+          ${defText ? `<blockquote class="concept-def-quote">${ESC(defText)}</blockquote>` : ''}
           ${preview ? `<div class="concept-list-preview">${preview}</div>` : ''}
           <div class="concept-list-foot">
-            <span>${domain}${tags}</span>
-            <span class="concept-list-time">${FMTREL(it.mtime)}</span>
+            <div class="concept-foot-tags">${d ? `<span class="domain-chip" style="${dColor ? 'color:'+dColor+';background:'+dColor+'18;border-color:'+dColor+'40' : ''}">${ESC(d)}</span>` : ''}${tags}</div>
+            <time class="concept-list-time">${FMTREL(it.mtime)}</time>
           </div>
         </div>`;
       }).join('')}

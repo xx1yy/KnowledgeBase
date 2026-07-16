@@ -40,3 +40,24 @@ const RELATION_TYPES = [
 ];
 const RELATION_COLORS = {};
 RELATION_TYPES.forEach(r => { RELATION_COLORS[r.value] = r.color; });
+
+// ── 领域色板（领域维度，与 type/relation 体系平行）──
+// 概念卡片的左侧色条 / 极淡背景 tint / 领域 chip 共用，统一收敛到此文件，
+// 避免散落在 dashboard.js 内联（增删领域只改这里一处）。
+const DOMAIN_PALETTE = {
+  '心理学':   '#0EA5E9', // cyan   青
+  '认知':     '#8B5CF6', // purple 紫
+  '元认知':   '#8B5CF6', // purple 紫（与认知同系）
+  '人际关系': '#10B981', // emerald 翠绿
+  '计算机科学':'#3B82F6', // blue  蓝
+  '行为经济学':'#F59E0B', // amber 琥珀
+  '哲学':     '#EC4899', // pink  粉
+  '社会学':   '#14B8A6', // teal  蓝绿
+};
+// 领域背景底色 alpha（8 位 hex 后缀）：数值越大越浓，0x10≈6%、0x12≈7%、0x1A≈10%
+const DOMAIN_TINT = '10';
+// 领域颜色查询（容错 trim / 未命中返回空）
+function domainColor(d){
+  if(!d) return '';
+  return DOMAIN_PALETTE[d] || DOMAIN_PALETTE[d.trim()] || '';
+}

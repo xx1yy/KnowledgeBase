@@ -64,7 +64,15 @@ async function initDomainFilter(){
     localStorage.setItem('kb_domain', currentDomain);
     updateDomainLabel();
     dashboardData = null;   // 强制仪表盘下次重新拉取（含新过滤）
-    if(typeof navigate === 'function') navigate(currentView, {push:false});
+    // 先刷新带领域过滤的全局计数（loadDashboard 末尾会重绘侧栏），
+    // 再导航重渲染内容，确保左侧栏各类型数量随过滤实时更新。
+    if(typeof loadDashboard === 'function'){
+      loadDashboard().finally(() => {
+        if(typeof navigate === 'function') navigate(currentView, {push:false});
+      });
+    } else {
+      if(typeof navigate === 'function') navigate(currentView, {push:false});
+    }
   }
 
   // “全部领域”与各项互斥：勾选它即清空各项；取消它且未选任何项则回弹

@@ -12,7 +12,7 @@ from backend.config import VAULT_ROOT, TYPE_DIR
 from backend.vault import (
     parse_frontmatter, item_from_file, sanitize_filename, _parse_concept_sections,
 )
-from backend.templates import generate_md, _build_frontmatter, concept_display_body
+from backend.templates import generate_md, _build_frontmatter
 
 
 # 自动生成笔记的后缀映射（book→文学笔记, video→视频笔记, post→帖子笔记）
@@ -21,6 +21,44 @@ _NOTE_SUFFIX = {
     'video': '视频笔记',
     'post': '帖子笔记',
 }
+
+
+def _replace_concept_section(body, heading, new_text):
+    """就地替换正文中 `## heading` 章节的内容，其余正文逐字保留；章节不存在则追加到文末。"""
+    pat = re.compile(r'(##\s*' + re.escape(heading) + r'[ \t]*\n)(.*?)(?=\n##\s|\Z)', re.DOTALL)
+    new_sec = (new_text or '').strip() + '\n'
+    if pat.search(body):
+        return pat.sub(lambda m: m.group(1) + new_sec, body, count=1)
+    return body.rstrip() + '\n\n## ' + heading + '\n' + new_sec
+
+
+def _replace_concept_definition(body, new_def):
+    """就地替换 `# 标题` 之后紧跟的 `> 定义` 行；若正文没有定义行则插入到标题后。"""
+    new_def = (new_def or '').strip()
+    if re.search(r'#\s+.+\n\s*>\s*[^\n]*', body):
+        return re.sub(r'(#\s+.+\n)\s*>\s*[^\n]*', lambda m: m.group(1) + '> ' + new_def, body, count=1)
+    return re.sub(r'(#\s+.+\n)', lambda m: m.group(1) + '> ' + new_def + '\n', body, count=1)
+
+
+def _update_concept_body(old_body, data):
+    """概念保存：只替换 data 中提供的章节，绝不整体重写正文。
+
+    早期实现用 concept_display_body 整体重建 6 段固定模板，会把未落在 5 个标准
+    插槽里的内容（如写在 `## 关联概念` 下的手写备注、没有 `## 核心解释` 头的自由正文）
+    在「改任意一栏」时被整体清空。改为就地替换后，编辑 怎么用 / 定义 等互不影响。
+    """
+    body = old_body
+    if 'definition' in data:
+        body = _replace_concept_definition(body, data['definition'])
+    if 'source' in data:
+        body = _replace_concept_section(body, '来源', '- [[' + (data.get('source') or '') + ']]')
+    if 'excerpt' in data:
+        body = _replace_concept_section(body, '原文摘录', data['excerpt'])
+    if 'content' in data:
+        body = _replace_concept_section(body, '核心解释', data['content'])
+    if 'how_to_use' in data:
+        body = _replace_concept_section(body, '怎么用', data['how_to_use'])
+    return body
 
 
 class CrudMixin:
@@ -131,22 +169,18 @@ class CrudMixin:
                      'plan_type', 'frequency', 'streak', 'best_streak', 'last_checkin', 'source_concept',
                      'cover', 'relations']
 
-        # 概念：结构化字段以正文为唯一来源，重写正文而不是塞进 frontmatter
+        # 概念：结构化字段以正文为唯一来源。
+        # 仅就地替换 data 中提供的章节，保留其余正文（避免整体重建丢失非标准内容，
+        # 例如写在 ## 关联概念 下的手写备注、或没有 ## 核心解释 头的自由正文）。
         if fm.get('type') == 'concept':
             for key in updatable:
                 if key in data:
                     fm[key] = data[key]
-            bd, be, bc, bh = _parse_concept_sections(content)
-            c_def = data.get('definition', bd)
-            c_exc = data.get('excerpt', be)
-            c_con = data.get('content', bc)
-            c_how = data.get('how_to_use', bh)
-            c_src = fm.get('source', '')
             # 剔除正文专属键，避免多行内容写入 frontmatter 破坏 YAML
             for k in ('content', 'definition', 'excerpt', 'how_to_use'):
                 fm.pop(k, None)
             fm['updated'] = time.strftime('%Y-%m-%d %H:%M')
-            new_body = concept_display_body(fm.get('title', ''), c_def, c_src, c_exc, c_con, c_how)
+            new_body = _update_concept_body(content, data)
             new_fm = _build_frontmatter(fm)
             new_text = f'---\n{new_fm}\n---\n{new_body}'
             fp.write_text(new_text, encoding='utf-8')
